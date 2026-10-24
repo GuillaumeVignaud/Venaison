@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Venaison</title>
+  <meta name="description" content="Distribution de la venaison à la fin de chaque journée de chasse.">
+  <meta name="theme-color" content="#1F3A2B">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Venaison">
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+  <header class="barre-haut">
+    <span class="marque">
+      <svg class="marque-bois" viewBox="0 0 100 100" aria-hidden="true">
+        <path d="M45 88C26 82 13 58 21 14M25 74Q31 63 40 60M17 55Q24 45 33 43M16 37Q22 28 30 26M55 88C74 82 87 58 79 14M75 74Q69 63 60 60M83 55Q76 45 67 43M84 37Q78 28 70 26" fill="none" stroke="currentColor" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      Venaison
+    </span>
+    <span class="saison" id="saison"></span>
+  </header>
+
+  <main id="vue" tabindex="-1"></main>
+
+  <nav class="onglets" aria-label="Navigation">
+    <button class="onglet" data-act="onglet" data-onglet="journee">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 7v12h16V7M8 3v4M16 3v4M8 12h3M8 16h6"/></svg>
+      <span>Journée</span>
+    </button>
+    <button class="onglet" data-act="onglet" data-onglet="historique">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 20V10M12 20V4M19 20v-7"/></svg>
+      <span>Historique</span>
+    </button>
+    <button class="onglet" data-act="onglet" data-onglet="membres">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zM2.5 20c.6-3.6 3.3-5.5 6.5-5.5s5.9 1.9 6.5 5.5M16 4.5a3.5 3.5 0 0 1 0 6.5M18 14.8c2 .8 3.2 2.5 3.5 5.2"/></svg>
+      <span>Membres</span>
+    </button>
+    <button class="onglet" data-act="onglet" data-onglet="reglages">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0M16 4v4M10 10v4M18 16v4"/></svg>
+      <span>Réglages</span>
+    </button>
+  </nav>
+
+  <div id="modale"></div>
+  <div id="toast" role="status" aria-live="polite"></div>
+  <input type="file" id="fichier-import" accept=".json,application/json" hidden>
+
+  <script src="js/logic.js"></script>
+  <script src="js/store.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
