@@ -163,4 +163,37 @@ test('compteur de « non » et alerte', () => {
   assert.strictEqual(L.enAlerte(membres[0], journees, params), false);
 });
 
+test('absent : jamais servi, et pas compté comme un « non »', () => {
+  const r = L.attribuer({
+    journee: base([{ id: '1', bague: 'X1', poids: 90, validation: 'OK', tireurId: 'c' }],
+      { presences: { a: 'oui', b: 'oui', c: 'absent' } }),
+    membres, params, journal: [],
+  });
+  assert.strictEqual(r.pieces.length, 4);
+  assert.ok(r.pieces.every((p) => p.dest !== 'm:c'));
+  const journees = [{ presences: { b: 'absent' } }, { presences: { b: 'absent' } }, { presences: { b: 'non' } }];
+  assert.strictEqual(L.nbNon('b', journees), 1);
+  assert.strictEqual(L.enAlerte(membres[1], journees, params), false);
+});
+
+test('absences rattrapées : même total par action en fin de saison', () => {
+  const journal = [];
+  for (let k = 0; k < 30; k++) {
+    const date = '2026-' + String(1 + Math.floor(k / 28)).padStart(2, '0') + '-' + String(1 + (k % 28)).padStart(2, '0');
+    const presences = { a: 'oui', b: 'oui', c: 'oui' };
+    if (k < 5) presences.a = 'absent';
+    if (k >= 10 && k < 13) presences.b = 'absent';
+    if (k === 15) presences.c = 'absent';
+    const r = L.attribuer({
+      journee: base([{ id: '1', bague: 'Q' + k, poids: 90, validation: 'OK' }], { date, presences }),
+      membres, params, journal,
+    });
+    r.pieces.forEach((p) => journal.push({ date, nature: 'Distribution', piece: p.piece, qte: 1, membreId: p.dest.slice(2) }));
+  }
+  const t = L.totaux(journal);
+  assert.strictEqual(t['m:a'].total, 48);
+  assert.strictEqual(t['m:b'].total, 24);
+  assert.strictEqual(t['m:c'].total, 48);
+});
+
 console.log(`${ok} tests réussis — ${jours} journées et ${pieces} pièces identiques au calcul de référence.`);

@@ -212,6 +212,7 @@ body.avec-action main { padding-bottom: calc(var(--haut-onglets) + var(--haut-ac
 .seg > button:disabled { cursor: default; opacity: .75; }
 .seg-oui[aria-pressed="true"] { background: var(--oui); color: var(--sur-couleur); }
 .seg-non[aria-pressed="true"] { background: var(--non); color: var(--carte); }
+.seg-absent[aria-pressed="true"] { background: var(--ecorce); color: var(--carte); }
 .seg-ok button[data-v="OK"][aria-pressed="true"] { background: var(--oui); color: var(--sur-couleur); }
 .seg-ok button[data-v="NOK"][aria-pressed="true"] { background: var(--alerte); color: var(--sur-couleur); }
 .seg-radio { flex: 1; display: flex; }
@@ -231,6 +232,7 @@ body.avec-action main { padding-bottom: calc(var(--haut-onglets) + var(--haut-ac
 .liste-pres { background: var(--carte); border-radius: var(--rayon); border: 1px solid var(--trait); }
 .pres { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 9px 10px 9px 14px; }
 .pres .seg, .bete .seg { flex: none; }
+.pres .seg > button { min-width: 50px; padding: 8px 9px; }
 .pres-nom { flex: 1 1 auto; }
 .pres + .pres { border-top: 1px solid var(--trait); }
 .pres-nom { min-width: 0; display: flex; flex-direction: column; }
@@ -440,4 +442,5 @@ body.avec-action #toast { bottom: calc(var(--haut-onglets) + var(--haut-action) 
   .etape-t { font-size: 15px; }
   .piece-dest { width: 56%; }
   .seg > button { min-width: 48px; padding: 8px; }
+  .pres .seg > button { min-width: 44px; padding: 8px 7px; }
 }

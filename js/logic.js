@@ -6,7 +6,8 @@
  *  - score = pièces déjà reçues dans la catégorie ÷ coefficient de l'action (1 → 2, 1/2 → 1)
  *  - chaque pièce va au plus petit score ; égalité → ordre alphabétique
  *  - le tireur présent reçoit d'abord une pièce de chacune de ses bêtes (option)
- *  - seuls les membres actifs indiqués « oui » ce jour-là sont servis
+ *  - seuls les membres actifs indiqués « oui » ce jour-là sont servis ; « non » et « absent » ne reçoivent
+ *    rien ce jour-là et rattrapent ensuite (seul le « non » compte pour l'alerte)
  */
 (function (root, factory) {
   const api = factory();
