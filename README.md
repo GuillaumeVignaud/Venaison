@@ -5,7 +5,9 @@ Elle fonctionne **sans réseau** une fois installée. Les données restent sur l
 
 Mêmes règles que le fichier Excel :
 
-- présences oui / non par journée, avec alerte au 4e « non » (action 1) ou au 2e (action 1/2) ;
+- présences oui / non / absent par journée, avec alerte au 4e « non » (action 1) ou au 2e (action 1/2) ;
+- un « non » ou un « absent » n'est pas servi ce jour-là et rattrape aux journées suivantes : en fin de saison,
+  chaque action 1 a reçu autant que les autres et chaque action 1/2 la moitié. L'absent ne compte pas comme un « non » ;
 - bêtes avec catégorie proposée selon le poids : entier sous 40 kg, 2 demis jusqu'à 65 kg, 4 quarts au-delà (modifiable) ;
 - priorité au tireur présent (une pièce de chacune de ses bêtes, un quart arrière si la bête est en quarts) ;
 - les autres pièces vont au plus petit score = pièces reçues dans la catégorie ÷ coefficient
@@ -49,7 +51,7 @@ saisissez les membres **dans l'appli installée**, pas dans un onglet Safari.
 
 1. **Membres** : saisissez chaque membre (NOM Prénom) et son action, 1 ou 1/2.
 2. À l'ouverture, l'appli propose de créer la **journée de chasse** du jour. Répondez « Non » pour revenir à la dernière journée.
-3. **Présences** : oui ou non pour chaque membre, puis « Valider les présences ».
+3. **Présences** : oui, non ou absent pour chaque membre, puis « Valider les présences ».
 4. **Bêtes** : une fiche par bête (bague, espèce, poids, sexe, prélevé par), OK ou NOK, puis « Lancer l'attribution ».
 5. **Répartition** : vérifiez, corrigez si besoin (« Par bête »), puis « Valider la répartition ».
    L'affichage « Par personne » sert de feuille d'appel au moment de la distribution.

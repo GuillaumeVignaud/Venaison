@@ -270,11 +270,13 @@
     const verrou = j.presencesValidees;
     const nOui = ms.filter((m) => j.presences[m.id] === 'oui').length;
     const nNon = ms.filter((m) => j.presences[m.id] === 'non').length;
-    const nVide = ms.length - nOui - nNon;
+    const nAbs = ms.filter((m) => j.presences[m.id] === 'absent').length;
+    const nVide = ms.length - nOui - nNon - nAbs;
+    const abs = nAbs ? `, ${pluriel(nAbs, 'absent', 'absents')}` : '';
     const tete = verrou
-      ? `<div class="bandeau ok"><p>Présences validées : ${pluriel(nOui, 'présent', 'présents')}, ${nNon} non.</p>
+      ? `<div class="bandeau ok"><p>Présences validées : ${pluriel(nOui, 'présent', 'présents')}, ${nNon} non${abs}.</p>
            <button class="btn petit" data-act="rouvrirPresences">Rouvrir</button></div>`
-      : `<div class="resume"><p>${nOui} oui, ${nNon} non${nVide ? `, <strong>${nVide} à renseigner</strong>` : ''}</p>
+      : `<div class="resume"><p>${nOui} oui, ${nNon} non${abs}${nVide ? `, <strong>${nVide} à renseigner</strong>` : ''}</p>
            ${nVide ? `<button class="lien" data-act="tousOui">Oui pour les ${nVide} restants</button>` : ''}</div>`;
     const lignes = ms.map((m) => {
       const v = j.presences[m.id] || '';
@@ -288,6 +290,7 @@
         <div class="seg" role="group" aria-label="Présence de ${esc(m.nom)}">
           <button class="seg-oui" data-act="presence" data-id="${m.id}" data-v="oui" aria-pressed="${v === 'oui'}" ${verrou ? 'disabled' : ''}>oui</button>
           <button class="seg-non" data-act="presence" data-id="${m.id}" data-v="non" aria-pressed="${v === 'non'}" ${verrou ? 'disabled' : ''}>non</button>
+          <button class="seg-absent" data-act="presence" data-id="${m.id}" data-v="absent" aria-pressed="${v === 'absent'}" ${verrou ? 'disabled' : ''}>absent</button>
         </div>
       </li>`;
     }).join('');
@@ -500,6 +503,7 @@
     });
     const servis = new Set(cles);
     const presentsSansRien = membresTries(true).filter((m) => j.presences[m.id] === 'oui' && !servis.has('m:' + m.id));
+    const absents = membresTries(true).filter((m) => j.presences[m.id] === 'absent');
     return `<ol class="appel">
         ${cles.map((k) => {
           const ps = parDest.get(k);
@@ -515,7 +519,8 @@
           </li>`;
         }).join('')}
       </ol>
-      ${presentsSansRien.length ? `<p class="note">Présents sans pièce aujourd’hui (prioritaires la prochaine fois) : ${presentsSansRien.map((m) => esc(m.nom)).join(', ')}.</p>` : ''}`;
+      ${presentsSansRien.length ? `<p class="note">Présents sans pièce aujourd’hui (prioritaires la prochaine fois) : ${presentsSansRien.map((m) => esc(m.nom)).join(', ')}.</p>` : ''}
+      ${absents.length ? `<p class="note">Absents, non servis (ils rattraperont aux prochaines journées) : ${absents.map((m) => esc(m.nom)).join(', ')}.</p>` : ''}`;
   }
 
   // ------------------------------------------------------------------ historique
@@ -1022,9 +1027,9 @@
     },
     async validerPresences() {
       const j = jourCourant();
-      const manquants = membresTries(true).filter((m) => j.presences[m.id] !== 'oui' && j.presences[m.id] !== 'non');
+      const manquants = membresTries(true).filter((m) => !['oui', 'non', 'absent'].includes(j.presences[m.id]));
       if (manquants.length) {
-        await alerte('Présences incomplètes', `<p>Indiquez oui ou non pour :</p>${liste(manquants.map((m) => m.nom))}`);
+        await alerte('Présences incomplètes', `<p>Indiquez oui, non ou absent pour :</p>${liste(manquants.map((m) => m.nom))}`);
         return;
       }
       const n = membresTries(true).filter((m) => j.presences[m.id] === 'oui').length;
