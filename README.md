@@ -3,17 +3,25 @@
 Appli de téléphone pour répartir la venaison entre les membres à la fin de chaque journée de chasse.
 Elle fonctionne **sans réseau** une fois installée. Les données restent sur le téléphone.
 
-Mêmes règles que le fichier Excel :
+Règles :
 
 - présences oui / non / absent par journée, avec alerte au 4e « non » (action 1) ou au 2e (action 1/2) ;
 - un « non » ou un « absent » n'est pas servi ce jour-là et rattrape aux journées suivantes : en fin de saison,
   chaque action 1 a reçu autant que les autres et chaque action 1/2 la moitié. L'absent ne compte pas comme un « non » ;
 - bêtes avec catégorie proposée selon le poids : entier sous 40 kg, 2 demis jusqu'à 65 kg, 4 quarts au-delà (modifiable) ;
 - priorité au tireur présent (une pièce de chacune de ses bêtes, un quart arrière si la bête est en quarts) ;
-- les autres pièces vont au plus petit score = pièces reçues dans la catégorie ÷ coefficient
-  (action 1 = 2, action 1/2 = 1), à égalité par ordre alphabétique ;
+- tous les comptes sont ramenés à l'action (pièces reçues ÷ 2 pour une action 1, ÷ 1 pour une action 1/2),
+  et une pièce compte pour 1, quelle que soit sa taille ;
+- chaque pièce va d'abord à celui qui a le moins de pièces au total sur la saison, puis le moins de cette espèce,
+  puis le moins de cette pièce de cette espèce (ex. quart arrière de chevreuil) ; à égalité, à celui servi
+  il y a le plus longtemps, et l'ordre alphabétique en dernier recours ;
+- 1 pièce par personne et par journée. Un membre en retard (total sous la moyenne des présents) peut en recevoir
+  une 2e (« Rattrapage »), mais pas du même type, sauf pour le sanglier. S'il y a plus de pièces que de places,
+  le surplus est réparti 2 par personne au plus, et 3 ou plus seulement s'il y a plus de 2 pièces par présent ;
+- les espèces les plus rares de la saison sont distribuées en premier, quarts arrière d'abord ;
 - répartition corrigeable à la main, y compris au profit d'un propriétaire (hors équilibrage) ;
-- alignement d'un membre arrivé en cours de saison sur le moins servi.
+- alignement d'un membre arrivé en cours de saison sur le moins servi ;
+- Historique > Écarts : avance ou retard de chacun sur sa juste part (total, par espèce, en kg).
 
 ## 1. Mettre l'appli en ligne avec GitHub Pages
 
@@ -83,8 +91,8 @@ Les données enregistrées sur le téléphone sont conservées lors d'une mise �
 node tests/logic.test.js
 ```
 
-Le test compare l'appli à un calcul de référence indépendant sur 40 saisons générées au hasard
-(281 journées, 2 431 pièces), plus les cas particuliers : priorité tireur, absents, bagues en double, alignement.
+Le test rejoue 40 saisons générées au hasard (281 journées, 2 431 pièces) et contrôle chaque règle
+de répartition, plus les cas particuliers : priorité tireur, absents, rattrapage, sanglier, surplus, bagues en double, alignement.
 
 ## Organisation des fichiers
 

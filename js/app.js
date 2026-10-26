@@ -530,10 +530,41 @@
     return `
       <h1 class="titre-page">Historique</h1>
       <div class="bascule" role="group" aria-label="Affichage">
-        <button data-act="vueHist" data-v="totaux" aria-pressed="${vue === 'totaux'}">Totaux de la saison</button>
+        <button data-act="vueHist" data-v="totaux" aria-pressed="${vue === 'totaux'}">Totaux</button>
+        <button data-act="vueHist" data-v="ecarts" aria-pressed="${vue === 'ecarts'}">Écarts</button>
         <button data-act="vueHist" data-v="journal" aria-pressed="${vue === 'journal'}">Journal</button>
       </div>
-      ${vue === 'totaux' ? histTotaux() : histJournal()}`;
+      ${vue === 'totaux' ? histTotaux() : vue === 'ecarts' ? histEcarts() : histJournal()}`;
+  }
+
+  /** Écart signé : +1,5 / −2 / 0, coloré selon le signe. */
+  function ecartHtml(x, unite) {
+    if (!x) return '<span class="zero">0</span>';
+    const v = (unite === 'kg' ? kg(Math.abs(x)) : qte(Math.abs(x)));
+    return x > 0 ? `<span class="ecart-plus">+${v}</span>` : `<span class="ecart-moins">−${v}</span>`;
+  }
+
+  function histEcarts() {
+    const E = L.ecarts({ membres: d().membres, params: d().params, journal: d().journal });
+    if (!E.lignes.length) return '<p class="vide-petit">Aucun membre actif pour l’instant.</p>';
+    const abrege = (e) => (e.length > 5 ? e.slice(0, 4) + '.' : e) || 'Autre';
+    const lignes = [...E.lignes].sort((a, b) => a.total - b.total || L.compareNoms(a.nom, b.nom));
+    return `
+      <table class="totaux ecarts">
+        <thead><tr><th scope="col">Membre</th><th scope="col" title="Total des pièces">Total</th>
+          ${E.especes.map((e) => `<th scope="col" title="${esc(e || 'Sans espèce')}">${esc(abrege(e))}</th>`).join('')}
+          <th scope="col">kg</th></tr></thead>
+        <tbody>
+          ${lignes.map((l) => `<tr>
+            <th scope="row"><span class="ligne-nom"><span class="nom">${esc(l.nom)}</span>
+              <span class="sous">Action ${esc(l.action)}, ${pluriel(l.recu, 'pièce', 'pièces')}</span></span></th>
+            <td><strong>${ecartHtml(l.total)}</strong></td>
+            ${E.especes.map((e) => `<td>${ecartHtml(l.especes[e])}</td>`).join('')}
+            <td class="kg">${ecartHtml(l.kg, 'kg')}</td>
+          </tr>`).join('')}
+        </tbody>
+      </table>
+      <p class="note">Avance (+) ou retard (−) de chaque membre sur sa juste part, en pièces, ramenée à son action (une action 1/2 a droit à la moitié). Les plus en retard, en haut, sont servis en priorité. Les kilos sont indicatifs : l’équilibrage se fait au nombre de pièces.</p>`;
   }
 
   function lignesDe(cle) {
@@ -714,25 +745,25 @@
 
   async function aligner(m, apresAjout) {
     const q = L.alignement(m.id, d().membres, d().params, d().journal);
-    const total = L.TYPES.reduce((s, t) => s + q[t], 0);
+    const cles = Object.keys(q);
+    const total = cles.reduce((s, k) => s + q[k], 0);
     if (!total) {
       if (!apresAjout) await alerte('Aucun alignement nécessaire', '<p>Le membre le moins servi n’a encore rien reçu : le nouveau membre part déjà au même niveau.</p>');
       return;
     }
     const ok = await confirmer(apresAjout ? 'La saison a commencé' : 'Aligner sur le moins servi ?',
       `<p>Aligner <strong>${esc(m.nom)}</strong> sur le membre le moins servi, pour qu’il ne soit pas prioritaire partout aux prochaines journées :</p>
-       ${liste(L.TYPES.map((t) => `${t} : ${qte(q[t])}`))}
+       ${liste(cles.map((k) => `${L.libelleCle(k)} : ${qte(q[k])}`))}
        <p class="aide">Ces quantités comptent dans le calcul d’équité mais ne correspondent à aucune viande reçue.</p>`,
       'Aligner');
     if (!ok) return;
     const now = new Date().toISOString();
-    L.TYPES.forEach((t) => {
-      if (q[t] > 0) {
-        d().journal.push({
-          date: aujourdHui(), bague: '', espece: '', poidsBete: null, tireur: '', piece: t, qte: q[t], poidsPiece: 0,
-          membreId: m.id, nom: m.nom, destinataire: 'Membre', nature: 'Ajustement', valideLe: now,
-        });
-      }
+    cles.forEach((k) => {
+      const { espece, piece } = L.decouperCle(k);
+      d().journal.push({
+        date: aujourdHui(), bague: '', espece, poidsBete: null, tireur: '', piece, qte: q[k], poidsPiece: 0,
+        membreId: m.id, nom: m.nom, destinataire: 'Membre', nature: 'Ajustement', valideLe: now,
+      });
     });
     sauver();
     rendre();
@@ -892,15 +923,21 @@
 
   function exporterTotaux() {
     const T = L.totaux(d().journal);
-    const tete = ['Nom', 'Action', 'Actif', 'Entiers', 'Demis', 'Quarts avant', 'Quarts arrière', 'Total pièces', 'Kg reçus', 'Nb « non »'];
+    const E = L.ecarts({ membres: d().membres, params: d().params, journal: d().journal });
+    const ecartDe = new Map(E.lignes.map((l) => [l.id, l]));
+    const tete = ['Nom', 'Action', 'Actif', 'Entiers', 'Demis', 'Quarts avant', 'Quarts arrière', 'Total pièces', 'Kg reçus', 'Nb « non »',
+      'Écart total (pièces)', ...E.especes.map((e) => `Écart ${e || 'sans espèce'}`), 'Écart kg'];
+    const vides = () => ['', ...E.especes.map(() => ''), ''];
     const lignes = [...d().membres].sort((a, b) => L.compareNoms(a.nom, b.nom)).map((m) => {
       const t = T['m:' + m.id] || {};
+      const ec = ecartDe.get(m.id);
       return [m.nom, m.action, m.actif ? 'Oui' : 'Non', nb(t.Entier || 0), nb(t.Demi || 0), nb(t['Quart avant'] || 0),
-        nb(t['Quart arrière'] || 0), nb(t.total || 0), nb(t.kg || 0), L.nbNon(m.id, d().journees)];
+        nb(t['Quart arrière'] || 0), nb(t.total || 0), nb(t.kg || 0), L.nbNon(m.id, d().journees),
+        ...(ec ? [nb(ec.total), ...E.especes.map((e) => nb(ec.especes[e])), nb(ec.kg)] : vides())];
     });
     Object.keys(T).filter((k) => k.startsWith('p:')).forEach((k) => {
       const t = T[k];
-      lignes.push([k.slice(2), '', 'Hors équilibrage', nb(t.Entier), nb(t.Demi), nb(t['Quart avant']), nb(t['Quart arrière']), nb(t.total), nb(t.kg), '']);
+      lignes.push([k.slice(2), '', 'Hors équilibrage', nb(t.Entier), nb(t.Demi), nb(t['Quart avant']), nb(t['Quart arrière']), nb(t.total), nb(t.kg), '', ...vides()]);
     });
     partagerFichier(nomFichier(`venaison-totaux-${d().saison}.csv`), csv([tete, ...lignes]), 'text/csv');
   }
@@ -1079,6 +1116,7 @@
       rendre();
       window.scrollTo(0, 0);
       toast(`Répartition proposée : ${pluriel(r.pieces.length, 'pièce', 'pièces')}.`);
+      if (r.notes.length) await alerte('Peu de présents', liste(r.notes));
     },
     vueRep(el) {
       ui.vueRep = el.dataset.v;

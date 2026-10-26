@@ -327,6 +327,10 @@ body.avec-action main { padding-bottom: calc(var(--haut-onglets) + var(--haut-ac
 .zero { color: var(--trait); }
 @media (prefers-color-scheme: dark) { .zero { color: #4b564e; } }
 .totaux tr.en-alerte .nom { color: var(--alerte); }
+.ecart-plus { color: var(--oui); }
+.ecart-moins { color: var(--alerte); }
+.ecarts td { white-space: nowrap; }
+.ecarts .ligne-nom { cursor: default; }
 .totaux .separateur th { background: var(--ecorce-fond); color: var(--ecorce); font-size: 13px; font-weight: 600; padding: 8px 12px; }
 .totaux .autres .nom { font-style: italic; }
 .totaux tr.detail td { text-align: left; padding: 4px 12px 12px; background: var(--fond); border-top: 0; }
