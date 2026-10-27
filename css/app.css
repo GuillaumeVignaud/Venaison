@@ -355,6 +355,7 @@ body.avec-action main { padding-bottom: calc(var(--haut-onglets) + var(--haut-ac
 .j-quoi small { color: var(--gris); font-size: 13px; }
 .j-qui { font-weight: 650; text-align: right; white-space: nowrap; }
 .journal-jour li.aj { color: var(--ecorce); background: var(--ecorce-fond); }
+.journal-jour li.nc { color: var(--gris); font-style: italic; }
 
 /* ---------------------------------------------------------------- membres */
 

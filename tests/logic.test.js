@@ -458,4 +458,47 @@ test('nouvelle saison : qui a reçu du cerf', () => {
   assert.strictEqual(recuDe(journal, 'p0', 'Cerf'), 1);
 });
 
+// --- Pièces non consommables et choix imposés à la main
+test('non consommable : à personne, les autres pièces recalculées', () => {
+  // 3 présents, un chevreuil en 4 quarts, sans tireur : 1 pièce chacun + 1 rattrapage/surplus
+  const betes = [{ id: 'q', bague: 'NC1', espece: 'Chevreuil', poids: 80, validation: 'OK' }];
+  const sans = L.attribuer({ journee: base(betes), membres, params, journal: [] });
+  assert.strictEqual(sans.pieces.length, 4);
+  assert.deepStrictEqual(sans.pieces.map((p) => p.id), ['q#0', 'q#1', 'q#2', 'q#3']);
+  // Le 1er quart arrière devient non consommable : 3 pièces pour 3 présents, une chacun
+  const r = L.attribuer({ journee: base(betes), membres, params, journal: [], imposees: { 'q#0': { dest: L.NON_CONSO, remarque: 'Non consommable' } } });
+  assert.strictEqual(r.pieces[0].dest, L.NON_CONSO);
+  assert.strictEqual(r.pieces[0].remarque, 'Non consommable');
+  const servis = r.pieces.slice(1).map((p) => p.dest).sort();
+  assert.deepStrictEqual(servis, ['m:a', 'm:b', 'm:c']);
+});
+
+test('pièce imposée à un membre : elle compte pour lui', () => {
+  const betes = [{ id: 'q', bague: 'NC2', espece: 'Chevreuil', poids: 80, validation: 'OK' }];
+  const r = L.attribuer({
+    journee: base(betes), membres, params, journal: [],
+    imposees: { 'q#3': { dest: 'm:a', remarque: 'Modifié à la main' }, 'q#2': { dest: L.NON_CONSO, remarque: 'Non consommable' } },
+  });
+  assert.strictEqual(r.pieces[3].dest, 'm:a');
+  assert.strictEqual(r.pieces[3].remarque, 'Modifié à la main');
+  // Restent 2 pièces pour BRAVO et CHARLIE, ALPHA déjà servi
+  assert.deepStrictEqual([r.pieces[0].dest, r.pieces[1].dest].sort(), ['m:b', 'm:c']);
+});
+
+test('priorité tireur quand sa 1re pièce est non consommable : il reçoit la suivante', () => {
+  const betes = [{ id: 'q', bague: 'NC3', espece: 'Chevreuil', poids: 80, validation: 'OK', tireurId: 'c' }];
+  const r = L.attribuer({ journee: base(betes), membres, params, journal: [], imposees: { 'q#0': { dest: L.NON_CONSO } } });
+  assert.strictEqual(r.pieces[1].dest, 'm:c');
+  assert.strictEqual(r.pieces[1].remarque, 'Priorité tireur');
+});
+
+test('lignes « Non consommable » du journal : comptées pour personne', () => {
+  const journal = [{ date: '2026-10-01', nature: 'Non consommable', espece: 'Cerf', piece: 'Cuissot', qte: 1, membreId: null, nom: '' }];
+  const c = L.compteurs(journal, ['a', 'b'], null, paramsC);
+  assert.strictEqual(c.a.total + c.b.total, 0);
+  assert.deepStrictEqual(L.totaux(journal), {});
+  assert.strictEqual(L.saisonCommencee(journal), false);
+  assert.strictEqual(L.membresAvecCerf(journal).size, 0);
+});
+
 console.log(`${ok} tests réussis — ${jours} journées et ${pieces} pièces conformes aux règles de répartition.`);

@@ -65,6 +65,7 @@
 
   function nomDest(dest) {
     if (!dest) return '';
+    if (dest === L.NON_CONSO) return 'Non consommable';
     if (dest.startsWith('m:')) {
       const m = membre(dest.slice(2));
       return m ? m.nom : 'Membre supprimé';
@@ -432,12 +433,35 @@
 
   // ---- étape 3 : répartition
 
+  // Lignes du journal propres à une journée (remplacées à chaque validation)
+  const NATURES_JOUR = ['Distribution', 'Non consommable'];
+
+  /** Donne un id « beteId#rang » aux pièces d'une ancienne répartition qui n'en ont pas. */
+  function numeroterPieces(pieces) {
+    const rangs = {};
+    pieces.forEach((p) => {
+      rangs[p.beteId] = (rangs[p.beteId] || 0) + 1;
+      if (!p.id) p.id = `${p.beteId}#${rangs[p.beteId] - 1}`;
+    });
+  }
+
+  /** Choix à garder lors d'un recalcul : pièces modifiées à la main (tout = true) ou seulement non consommables. */
+  function piecesImposees(pieces, tout) {
+    const imp = {};
+    numeroterPieces(pieces);
+    pieces.forEach((p) => {
+      if (p.dest === L.NON_CONSO || (tout && p.manuel)) imp[p.id] = { dest: p.dest, remarque: p.remarque };
+    });
+    return imp;
+  }
+
   function optionsDest(dest) {
     const ms = membresTries(true);
     if (dest && dest.startsWith('m:') && !ms.some((m) => 'm:' + m.id === dest) && membre(dest.slice(2))) ms.push(membre(dest.slice(2)));
     const props = [...d().params.proprietaires];
     if (dest && dest.startsWith('p:') && !props.includes(dest.slice(2))) props.push(dest.slice(2));
     return `<option value="" ${!dest ? 'selected' : ''}>Personne</option>
+      <option value="${L.NON_CONSO}" ${dest === L.NON_CONSO ? 'selected' : ''}>Non consommable</option>
       <optgroup label="Membres">${ms.map((m) => `<option value="m:${m.id}" ${'m:' + m.id === dest ? 'selected' : ''}>${esc(m.nom)}</option>`).join('')}</optgroup>
       <optgroup label="Propriétaires">${props.map((p) => `<option value="p:${esc(p)}" ${'p:' + p === dest ? 'selected' : ''}>${esc(p)}</option>`).join('')}</optgroup>`;
   }
@@ -502,7 +526,7 @@
       parDest.get(k).push(p);
     });
     const cles = [...parDest.keys()].sort((a, b) => {
-      const rang = (k) => (k.startsWith('m:') ? 0 : k.startsWith('p:') ? 1 : 2);
+      const rang = (k) => (k.startsWith('m:') ? 0 : k.startsWith('p:') ? 1 : k ? 3 : 2);
       return rang(a) - rang(b) || L.compareNoms(nomDest(a), nomDest(b));
     });
     const servis = new Set(cles);
@@ -512,7 +536,7 @@
         ${cles.map((k) => {
           const ps = parDest.get(k);
           const tot = ps.reduce((s, p) => s + (Number(p.poidsPiece) || 0), 0);
-          return `<li class="appel-ligne${k.startsWith('p:') ? ' proprio' : ''}${!k ? ' sans' : ''}">
+          return `<li class="appel-ligne${k.startsWith('p:') ? ' proprio' : ''}${!k || k === L.NON_CONSO ? ' sans' : ''}">
             <div class="appel-tete">
               <h3 class="appel-nom">${k ? esc(nomDest(k)) : 'Sans destinataire'}</h3>
               <span class="appel-total">${kg(tot)} kg</span>
@@ -648,6 +672,9 @@
             const nom = e.membreId && membre(e.membreId) ? membre(e.membreId).nom : e.nom;
             if (e.nature === 'Ajustement') {
               return `<li class="aj"><span class="j-quoi">Alignement ${esc(e.piece.toLowerCase())} : ${qte(e.qte)}</span><span class="j-qui">${esc(nom)}</span></li>`;
+            }
+            if (e.nature === 'Non consommable') {
+              return `<li class="nc"><span class="j-quoi">${esc(e.piece)}, ${esc((e.espece || '').toLowerCase())} ${esc(e.bague)} <small>${kg(e.poidsPiece)} kg</small></span><span class="j-qui">Non consommable</span></li>`;
             }
             return `<li><span class="j-quoi">${esc(e.piece)}, ${esc((e.espece || '').toLowerCase())} ${esc(e.bague)} <small>${kg(e.poidsPiece)} kg</small></span><span class="j-qui">${esc(nom)}</span></li>`;
           }).join('')}
@@ -1067,7 +1094,7 @@
       if (v !== 'suppr') return;
       if (!(await confirmer('Supprimer définitivement ?', `<p>La journée du ${L.dateFr(j.date)} sera effacée.</p>`, 'Supprimer', true))) return;
       d().journees = d().journees.filter((x) => x !== j);
-      d().journal = d().journal.filter((e) => !(e.nature === 'Distribution' && e.date === j.date));
+      d().journal = d().journal.filter((e) => !(NATURES_JOUR.includes(e.nature) && e.date === j.date));
       d().journeeCourante = joursTries()[0] ? joursTries()[0].date : null;
       ui.etape = null;
       sauver();
@@ -1133,7 +1160,9 @@
     },
     async lancerAttribution() {
       const j = jourCourant();
-      const r = L.attribuer({ journee: j, membres: d().membres, params: d().params, journal: d().journal });
+      // Les pièces non consommables restent non consommables ; les autres corrections à la main sont effacées
+      const imposees = j.repartition ? piecesImposees(j.repartition.pieces, false) : {};
+      const r = L.attribuer({ journee: j, membres: d().membres, params: d().params, journal: d().journal, imposees });
       if (r.erreurs.length) {
         await alerte('Attribution impossible', liste(r.erreurs));
         return;
@@ -1163,15 +1192,24 @@
       const j = jourCourant();
       const r = j.repartition;
       const vides = r.pieces.filter((p) => !p.dest).length;
-      const deja = d().journal.some((e) => e.date === j.date && e.nature === 'Distribution');
-      let msg = `<p>${pluriel(r.pieces.length - vides, 'pièce', 'pièces')} à enregistrer pour le ${L.dateFr(j.date)}.</p>`;
+      const nc = r.pieces.filter((p) => p.dest === L.NON_CONSO).length;
+      const deja = d().journal.some((e) => e.date === j.date && NATURES_JOUR.includes(e.nature));
+      let msg = `<p>${pluriel(r.pieces.length - vides - nc, 'pièce', 'pièces')} à enregistrer pour le ${L.dateFr(j.date)}.</p>`;
+      if (nc) msg += `<p>${pluriel(nc, 'pièce non consommable, notée dans le journal sans compter pour personne', 'pièces non consommables, notées dans le journal sans compter pour personne')}.</p>`;
       if (vides) msg += `<p>${pluriel(vides, 'pièce sans destinataire ne sera pas enregistrée', 'pièces sans destinataire ne seront pas enregistrées')}.</p>`;
       if (deja) msg += '<p>Elle remplace la répartition déjà enregistrée pour cette date.</p>';
       if (!(await confirmer('Valider la répartition ?', msg, 'Valider'))) return;
       const now = new Date().toISOString();
-      d().journal = d().journal.filter((e) => !(e.date === j.date && e.nature === 'Distribution'));
+      d().journal = d().journal.filter((e) => !(e.date === j.date && NATURES_JOUR.includes(e.nature)));
       r.pieces.forEach((p) => {
         if (!p.dest) return;
+        if (p.dest === L.NON_CONSO) {
+          d().journal.push({
+            date: j.date, bague: p.bague, espece: p.espece, poidsBete: p.poidsBete, tireur: p.tireur, piece: p.piece, qte: 1,
+            poidsPiece: p.poidsPiece, membreId: null, nom: '', destinataire: 'Non consommable', nature: 'Non consommable', valideLe: now,
+          });
+          return;
+        }
         const m = p.dest.startsWith('m:') ? membre(p.dest.slice(2)) : null;
         const nom = m ? m.nom : nomDest(p.dest);
         d().journal.push({
@@ -1266,11 +1304,30 @@
     async destPiece(el) {
       const j = jourCourant();
       const p = j.repartition.pieces[Number(el.dataset.i)];
+      const avant = p.dest;
       p.dest = el.value;
-      p.remarque = !p.dest ? 'Sans destinataire' : p.dest.startsWith('p:') ? 'Propriétaire, choix manuel' : 'Modifié à la main';
+      p.manuel = true;
+      p.remarque = !p.dest ? 'Sans destinataire' : p.dest === L.NON_CONSO ? 'Non consommable'
+        : p.dest.startsWith('p:') ? 'Propriétaire, choix manuel' : 'Modifié à la main';
       if (j.repartition.statut === 'validee') j.repartition.statut = 'modifiee';
+      // Pièce passée en (ou sortie de) non consommable : les autres pièces sont recalculées, choix à la main conservés
+      let recalcul = null;
+      if ((avant === L.NON_CONSO) !== (p.dest === L.NON_CONSO)) {
+        if (avant === L.NON_CONSO && !p.dest) delete p.manuel; // redevient une pièce à attribuer
+        const imposees = piecesImposees(j.repartition.pieces, true);
+        const r = L.attribuer({ journee: j, membres: d().membres, params: d().params, journal: d().journal, imposees });
+        if (!r.erreurs.length) {
+          j.repartition.pieces = r.pieces;
+          recalcul = r;
+        }
+      }
       sauver();
       rendre();
+      if (recalcul) {
+        toast('Répartition recalculée.');
+        if (recalcul.notes.length) await alerte('Peu de présents', liste(recalcul.notes));
+        return;
+      }
       if (p.dest.startsWith('m:') && j.presences[p.dest.slice(2)] !== 'oui') {
         await alerte('Attention', `<p>${esc(nomDest(p.dest))} n’est pas indiqué présent (oui) ce jour-là. L’attribution est conservée.</p>`);
       }

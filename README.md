@@ -26,6 +26,8 @@ Règles :
   n'en a pas eu, et ceux qui n'en ont pas eu la saison précédente passent d'abord (fiche membre, remplie
   toute seule à chaque nouvelle saison). Cette règle passe avant la limite d'une pièce par jour (« Priorité cerf ») ;
 - répartition corrigeable à la main, y compris au profit d'un propriétaire (hors équilibrage) ;
+- une pièce abîmée peut être marquée « Non consommable » : elle ne va à personne, les autres pièces du jour
+  sont recalculées, et elle reste notée dans le journal sans compter pour personne ;
 - alignement d'un membre arrivé en cours de saison sur le moins servi ;
 - Historique > Écarts : avance ou retard de chacun sur sa juste part (total, par espèce, en kg).
 

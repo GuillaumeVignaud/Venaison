@@ -27,6 +27,8 @@
   /** Pièces des cervidés (découpes « 8 morceaux » et « 6 morceaux »). */
   const PIECES_CERVIDES = ['Cuissot', 'Filet', 'Côtes/filet', 'Côte', 'Avant'];
   const DECOUPES = ['8 morceaux', '6 morceaux'];
+  /** Destination d'une pièce non consommable : distribuée à personne, tracée dans le journal. */
+  const NON_CONSO = 'nc';
   const CATEGORIES = ['Entier', '2 demis', '4 quarts', ...DECOUPES];
   const CERVIDES = 'Cervidés';
   const EPS = 1e-6;
@@ -191,7 +193,9 @@
    * Les avertissements (bagues en double) demandent une confirmation mais ne bloquent pas.
    * Les notes signalent un membre servi 3 fois ou plus faute de présents.
    */
-  function attribuer({ journee, membres, params, journal }) {
+  // `imposees` (facultatif) : { id de pièce « beteId#rang » : { dest, remarque } } gardées telles quelles
+  // (choix faits à la main, dont les pièces non consommables) ; les autres pièces sont recalculées.
+  function attribuer({ journee, membres, params, journal, imposees }) {
     const erreurs = [];
     const avertissements = [];
 
@@ -263,22 +267,37 @@
       jour[e.m.id].types.add(p.cle);
     }
 
-    // Découpe en pièces + priorité au tireur
+    // Découpe en pièces, pièces imposées à la main (non consommable, propriétaire, membre), puis priorité au tireur
+    const imp = imposees || {};
     const pieces = [];
     betesOK.forEach(({ b, cat }) => {
       const types = piecesDe(cat);
       const tireur = nomTireur(b, membres);
-      const first = pieces.length;
-      types.forEach((t) => {
-        pieces.push({
-          beteId: b.id, bague: b.bague || '', espece: b.espece || '', poidsBete: b.poids,
+      const libres = [];
+      types.forEach((t, rang) => {
+        const p = {
+          id: `${b.id}#${rang}`, beteId: b.id, bague: b.bague || '', espece: b.espece || '', poidsBete: b.poids,
           tireur, piece: t, poidsPiece: b.poids / types.length, dest: '', remarque: '', cle: cleType(groupe(b.espece), t),
-        });
+        };
+        pieces.push(p);
+        const fixe = imp[p.id];
+        if (!fixe) {
+          libres.push(p);
+          return;
+        }
+        p.manuel = true;
+        const e = fixe.dest && fixe.dest.startsWith('m:') && eligibles.find((x) => 'm:' + x.m.id === fixe.dest);
+        if (e) donner(p, e, fixe.remarque || 'Modifié à la main');
+        else {
+          p.dest = fixe.dest || '';
+          p.remarque = fixe.remarque || '';
+          p.fixe = true; // propriétaire, personne, non consommable ou membre non présent : ne compte pas
+        }
       });
-      if (journee.prioTireur) {
+      if (journee.prioTireur && libres.length) {
         const e = eligibles.find((x) => (b.tireurId && x.m.id === b.tireurId) ||
           (!b.tireurId && b.tireurNom && memeNom(x.m.nom, b.tireurNom)));
-        if (e) donner(pieces[first], e, 'Priorité tireur');
+        if (e) donner(libres[0], e, 'Priorité tireur');
       }
     });
 
@@ -290,7 +309,7 @@
       const s = groupe(e.espece);
       parEspece[s] = (parEspece[s] || 0) + (Number(e.qte) || 0);
     });
-    const ordre = pieces.map((p, i) => i).filter((i) => !pieces[i].dest).sort((a, b) => {
+    const ordre = pieces.map((p, i) => i).filter((i) => !pieces[i].dest && !pieces[i].fixe).sort((a, b) => {
       const pa = pieces[a];
       const pb = pieces[b];
       const ga = groupe(pa.espece);
@@ -363,7 +382,7 @@
       });
     }
 
-    pieces.forEach((p) => { delete p.cle; });
+    pieces.forEach((p) => { delete p.cle; delete p.fixe; });
     return { erreurs, avertissements, notes, pieces };
   }
 
@@ -451,6 +470,6 @@
     TYPES, CATEGORIES, compareNoms, memeNom, categorieSuggeree, categorieBete, piecesDe, coefficient,
     seuilAlerte, nbNon, enAlerte, compteurs, saisonCommencee, nomTireur, attribuer, alignement, ecarts, totaux,
     dateFr, parseNombre, cleType, decouperCle, libelleCle, estSanglier, estCerf, groupeEspece, decoupeEspece,
-    membresAvecCerf, especesCervides, DECOUPES, PIECES_CERVIDES, CERVIDES,
+    membresAvecCerf, especesCervides, DECOUPES, NON_CONSO, PIECES_CERVIDES, CERVIDES,
   };
 });
