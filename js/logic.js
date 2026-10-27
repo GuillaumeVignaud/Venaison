@@ -51,6 +51,12 @@
     return k ? dec[k] : '';
   }
 
+  /** Espèces rangées dans les cervidés (découpées en morceaux), dans l'ordre des réglages. */
+  function especesCervides(params) {
+    const dec = (params && params.decoupe) || {};
+    return Object.keys(dec).filter((x) => DECOUPES.includes(dec[x]));
+  }
+
   function categorieSuggeree(poids, params, espece) {
     const dec = decoupeEspece(espece, params);
     if (dec) return dec;
@@ -445,6 +451,6 @@
     TYPES, CATEGORIES, compareNoms, memeNom, categorieSuggeree, categorieBete, piecesDe, coefficient,
     seuilAlerte, nbNon, enAlerte, compteurs, saisonCommencee, nomTireur, attribuer, alignement, ecarts, totaux,
     dateFr, parseNombre, cleType, decouperCle, libelleCle, estSanglier, estCerf, groupeEspece, decoupeEspece,
-    membresAvecCerf, DECOUPES, PIECES_CERVIDES, CERVIDES,
+    membresAvecCerf, especesCervides, DECOUPES, PIECES_CERVIDES, CERVIDES,
   };
 });

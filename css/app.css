@@ -292,9 +292,14 @@ body.avec-action main { padding-bottom: calc(var(--haut-onglets) + var(--haut-ac
 .piece-poids { font-size: 13.5px; color: var(--gris); }
 .piece-rem { font-size: 12.5px; color: var(--ecorce); font-style: italic; }
 .decoupes { list-style: none; margin: 0 0 8px; padding: 0; display: grid; gap: 6px; }
-.decoupes li { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-.decoupes label { font-weight: 600; min-width: 0; overflow-wrap: anywhere; }
-.piece-dest, .decoupes select {
+.decoupes li { display: flex; align-items: center; gap: 8px; }
+.decoupes label { flex: 1; font-weight: 600; min-width: 0; overflow-wrap: anywhere; display: flex; flex-direction: column; }
+.decoupes label small { font-weight: 400; font-size: 12.5px; color: var(--ecorce); }
+.decoupes select { width: 44%; }
+.ajout-cervide { margin-bottom: 10px; }
+.ajout-cervide input { flex: 1; min-width: 0; }
+.ajout-cervide select { width: auto; flex: none; }
+.piece-dest, .decoupes select, .ajout-cervide select {
   flex: none; width: 52%; min-height: 44px; padding: 8px 30px 8px 10px;
   border: 1.5px solid var(--foret-2); border-radius: 9px; background: var(--carte);
   font-weight: 600; appearance: none; -webkit-appearance: none;

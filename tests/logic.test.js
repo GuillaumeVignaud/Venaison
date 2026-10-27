@@ -401,6 +401,7 @@ test('découpe des cervidés selon les réglages', () => {
   assert.strictEqual(L.categorieSuggeree(50, avecDaim, 'Daim'), '6 morceaux');
   assert.strictEqual(L.groupeEspece('Daim', avecDaim), 'Cervidés');
   assert.strictEqual(L.groupeEspece('Daim', paramsC), 'Daim');
+  assert.deepStrictEqual(L.especesCervides(paramsC), ['Cerf', 'Daguet', 'Biche', 'Faon']);
 });
 
 test('cerf : ceux qui en ont déjà eu passent après tous les autres', () => {

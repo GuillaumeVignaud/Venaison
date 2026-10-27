@@ -792,6 +792,7 @@
         <button class="btn petit">Ajouter</button>
       </form>`;
     const a = p.actions;
+    const cervides = L.especesCervides(p);
     return `
       <h1 class="titre-page">Réglages</h1>
 
@@ -825,20 +826,28 @@
       </section>
 
       <section class="reglage">
-        <h2>Découpe par espèce</h2>
-        <ul class="decoupes">
-          ${p.especes.map((e) => {
-            const v = L.decoupeEspece(e, p);
-            return `<li><label for="r-dec-${esc(e)}">${esc(e)}</label>
-              <select id="r-dec-${esc(e)}" data-change="reglage" data-id="decoupe:${esc(e)}">
-                <option value="">Selon le poids</option>
-                ${L.DECOUPES.map((x) => `<option ${x === v ? 'selected' : ''}>${x}</option>`).join('')}
-              </select></li>`;
-          }).join('')}
-        </ul>
+        <h2>Cervidés</h2>
+        <p class="aide">Découpés en morceaux plutôt que selon le poids. Ils comptent ensemble comme une seule espèce pour l’équité.</p>
+        ${cervides.length ? `<ul class="decoupes">
+          ${cervides.map((e, i) => `<li>
+            <label for="r-cerv-${i}">${esc(e)}${L.estCerf(e) ? '<small>Rare : règle du cerf</small>' : ''}</label>
+            <select id="r-cerv-${i}" data-change="reglage" data-id="decoupe:${esc(e)}">
+              ${L.DECOUPES.map((x) => `<option ${x === p.decoupe[e] ? 'selected' : ''}>${x}</option>`).join('')}
+            </select>
+            <button class="btn-icone" data-act="retirerCervide" data-espece="${esc(e)}" aria-label="Retirer ${esc(e)} des cervidés">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7l10 10M17 7L7 17"/></svg></button>
+          </li>`).join('')}
+        </ul>` : '<p class="vide-petit">Aucune espèce dans les cervidés : toutes sont découpées selon le poids.</p>'}
+        <form class="ajout-ligne ajout-cervide" data-submit="ajouterCervide">
+          <label class="sr" for="aj-cervide">Espèce à ajouter aux cervidés</label>
+          <input id="aj-cervide" name="v" list="especes-hors-cervides" placeholder="Ajouter une espèce" autocomplete="off">
+          <datalist id="especes-hors-cervides">${p.especes.filter((e) => !L.decoupeEspece(e, p)).map((e) => `<option value="${esc(e)}">`).join('')}</datalist>
+          <label class="sr" for="aj-cervide-dec">Découpe</label>
+          <select id="aj-cervide-dec" name="dec">${L.DECOUPES.map((x) => `<option>${x}</option>`).join('')}</select>
+          <button class="btn petit">Ajouter</button>
+        </form>
         <p class="aide">8 morceaux : 2 avants, 2 côtes, 2 filets, 2 cuissots. 6 morceaux : 2 avants, 2 côtes/filets, 2 cuissots.
-          Les espèces découpées en morceaux comptent ensemble comme « Cervidés » pour l’équité.
-          Le cerf, rare, a sa propre règle : personne n’en reçoit un 2e morceau dans la saison tant qu’un présent n’en a pas eu,
+          Règle du cerf : personne n’en reçoit un 2e morceau dans la saison tant qu’un présent n’en a pas eu,
           et ceux qui n’en ont pas eu la saison précédente passent d’abord.</p>
       </section>
 
@@ -1193,9 +1202,16 @@
     editerMembre(el) { formMembre(membre(el.dataset.id)); },
     retirerListe(el) {
       const l = d().params[el.dataset.liste];
-      l.splice(Number(el.dataset.i), 1);
+      const [retiree] = l.splice(Number(el.dataset.i), 1);
+      if (el.dataset.liste === 'especes') retirerDesCervides(retiree);
       sauver();
       rendre();
+    },
+    retirerCervide(el) {
+      retirerDesCervides(el.dataset.espece);
+      sauver();
+      rendre();
+      toast(`${el.dataset.espece} sera découpé selon le poids.`);
     },
     exporterSauvegarde() { exporterSauvegarde(); },
     importerSauvegarde() { $('#fichier-import').click(); },
@@ -1298,7 +1314,26 @@
     },
   };
 
+  function retirerDesCervides(espece) {
+    const p = d().params;
+    p.decoupe = Object.assign({}, p.decoupe);
+    Object.keys(p.decoupe).filter((x) => L.memeNom(x, espece)).forEach((x) => { delete p.decoupe[x]; });
+  }
+
   const soumissions = {
+    ajouterCervide(f) {
+      const p = d().params;
+      const saisie = f.elements.v.value.trim().replace(/\s+/g, ' ');
+      if (!saisie) return;
+      // On garde l'orthographe de la liste des espèces si elle y est déjà
+      const espece = p.especes.find((x) => L.memeNom(x, saisie)) || saisie;
+      retirerDesCervides(espece);
+      p.decoupe[espece] = f.elements.dec.value;
+      if (!p.especes.some((x) => L.memeNom(x, espece))) p.especes.push(espece);
+      sauver();
+      rendre();
+      toast(`${espece} ajouté aux cervidés.`);
+    },
     ajouterListe(f) {
       const v = f.elements.v.value.trim();
       const l = d().params[f.dataset.liste];
