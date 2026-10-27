@@ -22,7 +22,10 @@
         seuilDemi: 65,
         actions: { '1': { coef: 2, alerte: 4 }, '1/2': { coef: 1, alerte: 2 } },
         prioTireur: true,
-        especes: ['Chevreuil', 'Sanglier', 'Cerf', 'Daim'],
+        especes: ['Chevreuil', 'Sanglier', 'Cerf', 'Biche', 'Daguet', 'Faon', 'Daim'],
+        // Espèces découpées en morceaux plutôt que selon le poids ; elles comptent ensemble comme « Cervidés »
+        decoupe: { Cerf: '8 morceaux', Daguet: '8 morceaux', Biche: '6 morceaux', Faon: '6 morceaux' },
+        versionEspeces: 2,
         proprietaires: ['Propriétaire'],
       },
       membres: [],      // { id, nom, action: '1' | '1/2', actif }
@@ -39,6 +42,13 @@
     const res = Object.assign(base, d || {});
     res.params = Object.assign(donneesVides().params, (d && d.params) || {});
     res.params.actions = Object.assign(donneesVides().params.actions, res.params.actions || {});
+    // Données d'avant les cervidés : on ajoute une seule fois biche, daguet et faon à la liste des espèces
+    if (d && d.params && !(d.params.versionEspeces >= 2)) {
+      ['Biche', 'Daguet', 'Faon'].forEach((e) => {
+        if (!res.params.especes.some((x) => x.toLowerCase() === e.toLowerCase())) res.params.especes.push(e);
+      });
+      res.params.versionEspeces = 2;
+    }
     ['membres', 'journees', 'journal'].forEach((k) => { if (!Array.isArray(res[k])) res[k] = []; });
     return res;
   }

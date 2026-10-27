@@ -14,6 +14,10 @@ const params = {
   seuilEntier: 40, seuilDemi: 65,
   actions: { '1': { coef: 2, alerte: 4 }, '1/2': { coef: 1, alerte: 2 } },
 };
+// Mêmes réglages, avec la découpe des cervidés
+const paramsC = Object.assign({}, params, {
+  decoupe: { Cerf: '8 morceaux', Daguet: '8 morceaux', Biche: '6 morceaux', Faon: '6 morceaux' },
+});
 let ok = 0;
 function test(nom, fn) {
   try { fn(); ok++; } catch (e) { console.error('ÉCHEC :', nom, '\n ', e.message); process.exitCode = 1; }
@@ -40,12 +44,14 @@ test('lecture des nombres saisis', () => {
 let jours = 0;
 let pieces = 0;
 const PRIO = 'Priorité tireur';
+const PRIO_CERF = 'Priorité cerf';
 const SURPLUS = 'Surplus du jour';
 const coefDe = (m) => params.actions[m.action].coef;
 const ecartsFin = [];
 
 fixtures.forEach((saison, s) => {
-  const membres = saison.members;
+  // Un membre sur trois a eu du cerf la saison précédente
+  const membres = saison.members.map((m, i) => Object.assign({}, m, { cerfAnDernier: i % 3 === 0 }));
   const parNom = Object.fromEntries(membres.map((m) => [m.nom, m]));
   const journal = [];
   saison.days.forEach((day) => {
@@ -59,8 +65,8 @@ fixtures.forEach((saison, s) => {
       })),
     };
     const presents = membres.filter((m) => m.actif && day.presence[m.id] === 'oui');
-    const avant = L.compteurs(journal, membres.map((m) => m.id), null);
-    const r = L.attribuer({ journee, membres, params, journal });
+    const avant = L.compteurs(journal, membres.map((m) => m.id), null, paramsC);
+    const r = L.attribuer({ journee, membres, params: paramsC, journal });
     test(`saison ${s} ${day.date}`, () => {
       if (!journee.betes.some((b) => b.validation === 'OK') || !presents.length) return;
       assert.deepStrictEqual(r.erreurs, []);
@@ -73,7 +79,7 @@ fixtures.forEach((saison, s) => {
       const moyenne = presents.reduce((x, m) => x + avant[m.id].total, 0) / presents.reduce((x, m) => x + coefDe(m), 0);
       presents.forEach((m) => {
         const ps = recu[m.id];
-        const prio = ps.some((p) => p.remarque === PRIO);
+        const prio = ps.some((p) => p.remarque === PRIO || p.remarque === PRIO_CERF);
         // Pas 2 fois le même type le même jour (sauf sanglier, priorité tireur ou surplus)
         const vus = new Map();
         ps.forEach((p) => {
@@ -96,14 +102,28 @@ fixtures.forEach((saison, s) => {
       // à celui qu'avait le servi juste avant sa dernière pièce
       const apres = L.compteurs(journal.concat(r.pieces.map((p) => ({
         date: day.date, nature: 'Distribution', espece: p.espece, piece: p.piece, qte: 1, membreId: p.dest.slice(2),
-      }))), membres.map((m) => m.id), null);
+      }))), membres.map((m) => m.id), null, paramsC);
       const sansRien = presents.filter((m) => !recu[m.id].length);
-      presents.filter((m) => recu[m.id].filter((p) => p.remarque !== PRIO).length >= 2).forEach((y) => {
+      presents.filter((m) => recu[m.id].filter((p) => p.remarque !== PRIO).length >= 2 &&
+        !recu[m.id].some((p) => L.estCerf(p.espece))).forEach((y) => {
         sansRien.forEach((x) => {
           assert.ok((apres[y.id].total - 1) / coefDe(y) <= apres[x.id].total / coefDe(x) + 1e-9,
             `${y.nom} servi 2 fois alors que ${x.nom} avait moins`);
         });
       });
+      // Cerf : personne n'en reçoit un 2e dans la saison tant qu'un présent n'en a jamais eu
+      const toujoursSansCerf = presents.filter((m) => apres[m.id].cerf === 0);
+      presents.forEach((m) => {
+        const k = recu[m.id].filter((p) => L.estCerf(p.espece) && p.remarque !== PRIO).length;
+        if (k && avant[m.id].cerf + k >= 2) {
+          assert.strictEqual(toujoursSansCerf.length, 0, `${m.nom} : 2e morceau de cerf alors que ${toujoursSansCerf.map((x) => x.nom)} n'en a pas`);
+        }
+      });
+      // … et parmi ceux qui n'en ont jamais eu, ceux sans cerf l'an dernier passent d'abord
+      const servisCerf = presents.filter((m) => avant[m.id].cerf === 0 && recu[m.id].some((p) => L.estCerf(p.espece) && p.remarque !== PRIO));
+      if (servisCerf.some((m) => m.cerfAnDernier)) {
+        assert.ok(presents.every((m) => m.cerfAnDernier || avant[m.id].cerf > 0 || apres[m.id].cerf > 0), 'cerf de l’an dernier servi avant un autre');
+      }
       jours++;
       pieces += r.pieces.length;
     });
@@ -113,16 +133,17 @@ fixtures.forEach((saison, s) => {
     }));
   });
   // Équité de fin de saison, parmi les membres présents à toutes les journées
-  const fin = L.compteurs(journal, membres.map((m) => m.id), null);
+  const fin = L.compteurs(journal, membres.map((m) => m.id), null, paramsC);
   const ms = membres.filter((m) => m.actif && saison.days.every((dd) => dd.presence[m.id] === 'oui'));
   const sc = ms.map((m) => fin[m.id].total / coefDe(m));
   if (sc.length >= 2) ecartsFin.push(Math.max(...sc) - Math.min(...sc));
 });
 
 test('équité de fin de saison sur le total (membres toujours présents)', () => {
-  // Ancien moteur : 2,03 parts d'écart en moyenne ; nouveau : 0,91
+  // Avec le cerf en 8 morceaux, ces saisons comptent 3 546 pièces au lieu de 2 431 : écart moyen 1,66 part
+  // (1,72 sans la règle du cerf). Ancien moteur, cerf découpé au poids : 2,03.
   const moy = ecartsFin.reduce((a, b) => a + b, 0) / ecartsFin.length;
-  assert.ok(moy <= 1.2, `écart moyen ${moy}`);
+  assert.ok(moy <= 1.8, `écart moyen ${moy}`);
 });
 
 // --- Cas particuliers
@@ -355,6 +376,85 @@ test('absences rattrapées : même total par action en fin de saison', () => {
   assert.strictEqual(t['m:a'].total, 48);
   assert.strictEqual(t['m:b'].total, 24);
   assert.strictEqual(t['m:c'].total, 48);
+});
+
+// --- Cervidés
+const dix = Array.from({ length: 10 }, (_, i) => ({ id: 'p' + i, nom: 'MEMBRE ' + String.fromCharCode(65 + i), action: '1', actif: true }));
+const presentsDe = (ids) => Object.fromEntries(ids.map((id) => [id, 'oui']));
+const tous = dix.map((m) => m.id);
+const journeeC = (betes, extra) => Object.assign({
+  date: '2026-11-20', presences: presentsDe(tous), presencesValidees: true, prioTireur: false, betes,
+}, extra || {});
+const recuDe = (journal, id, espece) => journal.filter((e) => e.membreId === id && e.espece === espece).length;
+const ligne = (membreId, espece, piece) => ({ date: '2026-10-01', nature: 'Distribution', espece, piece, qte: 1, membreId });
+
+test('découpe des cervidés selon les réglages', () => {
+  assert.strictEqual(L.categorieSuggeree(120, paramsC, 'Cerf'), '8 morceaux');
+  assert.strictEqual(L.categorieSuggeree(70, paramsC, 'daguet'), '8 morceaux');
+  assert.strictEqual(L.categorieSuggeree(60, paramsC, 'Biche'), '6 morceaux');
+  assert.strictEqual(L.categorieSuggeree(25, paramsC, 'Faon'), '6 morceaux');
+  assert.strictEqual(L.categorieSuggeree(25, paramsC, 'Chevreuil'), 'Entier');
+  assert.deepStrictEqual(L.piecesDe('8 morceaux'), ['Cuissot', 'Cuissot', 'Filet', 'Filet', 'Côte', 'Côte', 'Avant', 'Avant']);
+  assert.deepStrictEqual(L.piecesDe('6 morceaux'), ['Cuissot', 'Cuissot', 'Côtes/filet', 'Côtes/filet', 'Avant', 'Avant']);
+  assert.strictEqual(L.categorieBete({ poids: 15, espece: 'Faon', categorie: 'Entier' }, paramsC), 'Entier');
+  const avecDaim = Object.assign({}, paramsC, { decoupe: Object.assign({ Daim: '6 morceaux' }, paramsC.decoupe) });
+  assert.strictEqual(L.categorieSuggeree(50, avecDaim, 'Daim'), '6 morceaux');
+  assert.strictEqual(L.groupeEspece('Daim', avecDaim), 'Cervidés');
+  assert.strictEqual(L.groupeEspece('Daim', paramsC), 'Daim');
+});
+
+test('cerf : ceux qui en ont déjà eu passent après tous les autres', () => {
+  const journal = [ligne('p0', 'Cerf', 'Cuissot'), ligne('p1', 'Cerf', 'Avant')];
+  const r = L.attribuer({ journee: journeeC([bete('1', 'Cerf', 120)]), membres: dix, params: paramsC, journal });
+  assert.deepStrictEqual(dests(r).sort(), ['p2', 'p3', 'p4', 'p5', 'p6', 'p7', 'p8', 'p9']);
+});
+
+test('cerf : priorité à ceux qui n\'en ont pas eu la saison précédente', () => {
+  const ms = dix.map((m, i) => Object.assign({}, m, { cerfAnDernier: i < 4 }));
+  const r = L.attribuer({ journee: journeeC([bete('1', 'Cerf', 120)]), membres: ms, params: paramsC, journal: [] });
+  ['p4', 'p5', 'p6', 'p7', 'p8', 'p9'].forEach((id) => assert.ok(dests(r).includes(id), id));
+  assert.strictEqual(new Set(dests(r)).size, 8);
+});
+
+test('cerf : passe avant la limite du jour, la pièce du tireur reste à lui', () => {
+  // p0 tire un chevreuil, n'a jamais eu de cerf et n'est pas en retard ; p1 et p2 ont déjà eu du cerf
+  const journal = [ligne('p1', 'Cerf', 'Cuissot'), ligne('p2', 'Cerf', 'Cuissot'),
+    ligne('p0', 'Chevreuil', 'Entier'), ligne('p0', 'Chevreuil', 'Entier'), ligne('p0', 'Sanglier', 'Demi')];
+  const r = L.attribuer({
+    journee: journeeC([bete('1', 'Chevreuil', 25, { tireurId: 'p0' }), bete('2', 'Cerf', 120, { categorie: '2 demis' })],
+      { prioTireur: true, presences: presentsDe(['p0', 'p1', 'p2']) }),
+    membres: dix, params: paramsC, journal,
+  });
+  assert.deepStrictEqual(r.pieces.filter((p) => p.dest === 'm:p0').map((p) => [p.espece, p.remarque]),
+    [['Chevreuil', 'Priorité tireur'], ['Cerf', 'Priorité cerf']]);
+  assert.ok(['m:p1', 'm:p2'].includes(r.pieces[2].dest));
+});
+
+test('cerf avec peu de présents : chacun un morceau avant un 2e', () => {
+  const r = L.attribuer({
+    journee: journeeC([bete('1', 'Cerf', 120)], { presences: presentsDe(['p0', 'p1', 'p2', 'p3', 'p4']) }),
+    membres: dix, params: paramsC, journal: [],
+  });
+  assert.deepStrictEqual([...new Set(dests(r).slice(0, 5))].sort(), ['p0', 'p1', 'p2', 'p3', 'p4']);
+});
+
+test('biche, faon, daguet et cerf comptent ensemble comme cervidés', () => {
+  const journal = [ligne('p0', 'Biche', 'Cuissot'), ligne('p1', 'Chevreuil', 'Entier')];
+  const c = L.compteurs(journal, ['p0'], null, paramsC);
+  assert.strictEqual(c.p0.esp['Cervidés'], 1);
+  assert.strictEqual(c.p0.type['Cervidés|Cuissot'], 1);
+  const r = L.attribuer({
+    journee: journeeC([bete('1', 'Faon', 15, { categorie: 'Entier' })], { presences: presentsDe(['p0', 'p1']) }),
+    membres: dix, params: paramsC, journal,
+  });
+  assert.deepStrictEqual(dests(r), ['p1']);
+});
+
+test('nouvelle saison : qui a reçu du cerf', () => {
+  const journal = [ligne('p0', 'Cerf', 'Filet'), ligne('p1', 'Daguet', 'Filet'),
+    { date: 'd', nature: 'Ajustement', espece: 'Cerf', piece: 'Avant', qte: 1, membreId: 'p2' }];
+  assert.deepStrictEqual([...L.membresAvecCerf(journal)], ['p0']);
+  assert.strictEqual(recuDe(journal, 'p0', 'Cerf'), 1);
 });
 
 console.log(`${ok} tests réussis — ${jours} journées et ${pieces} pièces conformes aux règles de répartition.`);

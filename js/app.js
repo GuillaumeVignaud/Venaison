@@ -313,7 +313,7 @@
           <span class="bete-bague">${b.bague ? esc(b.bague) : 'sans bague'}</span>
           <span class="bete-titre">${esc(b.espece || 'Espèce ?')} <span class="bete-poids">${b.poids ? kg(b.poids) + ' kg' : 'poids ?'}</span></span>
           ${sous ? `<span class="bete-sous">${sous.charAt(0).toUpperCase() + sous.slice(1)}</span>` : ''}
-          <span class="bete-cat">${cat ? esc(cat) : 'Catégorie ?'}${cat && !b.categorie ? ' <em>(selon le poids)</em>' : ''}</span>
+          <span class="bete-cat">${cat ? esc(cat) : 'Catégorie ?'}${cat && !b.categorie ? ` <em>(selon ${L.decoupeEspece(b.espece, p) ? 'l’espèce' : 'le poids'})</em>` : ''}</span>
         </button>
         <div class="seg seg-ok" role="group" aria-label="Validation">
           <button data-act="validationBete" data-id="${b.id}" data-v="OK" aria-pressed="${b.validation === 'OK'}">OK</button>
@@ -381,12 +381,16 @@
       corps, boutons,
       onOuvrir: (r) => {
         const poids = $('#f-poids', r);
+        const espece = $('#f-espece', r);
         const auto = $('#f-cat-auto', r);
         const maj = () => {
-          const c = L.categorieSuggeree(L.parseNombre(poids.value), p);
-          auto.textContent = c ? `Selon le poids : ${c}` : 'Selon le poids';
+          const parEspece = L.decoupeEspece(espece.value, p);
+          const c = L.categorieSuggeree(L.parseNombre(poids.value), p, espece.value);
+          const selon = parEspece ? 'Selon l’espèce' : 'Selon le poids';
+          auto.textContent = c ? `${selon} : ${c}` : selon;
         };
         poids.addEventListener('input', maj);
+        espece.addEventListener('change', maj);
         maj();
         const t = $('#f-tireur', r);
         t.addEventListener('change', () => {
@@ -557,7 +561,7 @@
         <tbody>
           ${lignes.map((l) => `<tr>
             <th scope="row"><span class="ligne-nom"><span class="nom">${esc(l.nom)}</span>
-              <span class="sous">Action ${esc(l.action)}, ${pluriel(l.recu, 'pièce', 'pièces')}</span></span></th>
+              <span class="sous">Action ${esc(l.action)}, ${pluriel(l.recu, 'pièce', 'pièces')}${l.cerf ? `, dont ${qte(l.cerf)} cerf` : ''}</span></span></th>
             <td><strong>${ecartHtml(l.total)}</strong></td>
             ${E.especes.map((e) => `<td>${ecartHtml(l.especes[e])}</td>`).join('')}
             <td class="kg">${ecartHtml(l.kg, 'kg')}</td>
@@ -582,12 +586,12 @@
     const ligne = (cle, nom, sous, alerteNom) => {
       const t = T[cle] || vide;
       const ouvert = ui.ouverts.has(cle);
-      const detail = ouvert ? `<tr class="detail"><td colspan="6">${detailLignes(cle)}</td></tr>` : '';
+      const detail = ouvert ? `<tr class="detail"><td colspan="7">${detailLignes(cle)}</td></tr>` : '';
       const n = (x) => (x ? qte(x) : '<span class="zero">0</span>');
       return `<tr class="${alerteNom ? 'en-alerte' : ''}">
           <th scope="row"><button class="ligne-nom" data-act="ouvrirLigne" data-id="${esc(cle)}" aria-expanded="${ouvert}">
             <span class="nom">${esc(nom)}</span>${sous ? `<span class="sous">${sous}</span>` : ''}</button></th>
-          <td>${n(t.Entier)}</td><td>${n(t.Demi)}</td><td>${n(t['Quart avant'])}</td><td>${n(t['Quart arrière'])}</td>
+          <td>${n(t.Entier)}</td><td>${n(t.Demi)}</td><td>${n(t['Quart avant'])}</td><td>${n(t['Quart arrière'])}</td><td>${n(L.PIECES_CERVIDES.reduce((x, k) => x + (t[k] || 0), 0))}</td>
           <td class="kg">${t.kg ? kg(t.kg) : '<span class="zero">0</span>'}</td>
         </tr>${detail}`;
     };
@@ -595,7 +599,7 @@
     return `
       <table class="totaux">
         <thead><tr><th scope="col">Membre</th><th scope="col" title="Entiers">Ent.</th><th scope="col" title="Demis">Demi</th>
-          <th scope="col" title="Quarts avant">Q. av.</th><th scope="col" title="Quarts arrière">Q. ar.</th><th scope="col">kg</th></tr></thead>
+          <th scope="col" title="Quarts avant">Q. av.</th><th scope="col" title="Quarts arrière">Q. ar.</th><th scope="col" title="Morceaux de cervidés (cuissots, filets, côtes, avants)">Cerv.</th><th scope="col">kg</th></tr></thead>
         <tbody>
           ${membres.map((m) => {
             const nn = L.nbNon(m.id, d().journees);
@@ -605,7 +609,7 @@
           }).join('')}
         </tbody>
         <tbody class="autres">
-          <tr class="separateur"><th colspan="6" scope="rowgroup">Propriétaires et autres destinataires, hors équilibrage</th></tr>
+          <tr class="separateur"><th colspan="7" scope="rowgroup">Propriétaires et autres destinataires, hors équilibrage</th></tr>
           ${[...autres].sort(L.compareNoms).map((nom) => ligne('p:' + nom, nom, '', false)).join('')}
         </tbody>
       </table>
@@ -695,6 +699,11 @@
       <fieldset class="champ"><legend>Action</legend>
         <div class="seg">${radio('1', 'Action 1')}${radio('1/2', 'Action 1/2')}</div>
         <p class="aide">Une action 1 reçoit deux fois plus qu’une action 1/2.</p></fieldset>
+      <label class="interrupteur dans-feuille">
+        <input type="checkbox" id="f-cerf" ${m.cerfAnDernier ? 'checked' : ''}>
+        <span class="interrupteur-piste" aria-hidden="true"></span>
+        <span class="interrupteur-txt"><strong>A reçu du cerf la saison dernière</strong><small>Ceux qui n’en ont pas eu sont servis en cerf d’abord. Rempli tout seul à chaque nouvelle saison.</small></span>
+      </label>
       ${existant ? `<label class="interrupteur dans-feuille">
           <input type="checkbox" id="f-actif" ${m.actif ? 'checked' : ''}>
           <span class="interrupteur-piste" aria-hidden="true"></span>
@@ -717,7 +726,7 @@
         if (!nom) return { erreur: 'Indiquez le nom du membre.' };
         if (d().membres.some((x) => x !== existant && L.memeNom(x.nom, nom))) return { erreur: `${nom} existe déjà dans la liste.` };
         const actif = $('#f-actif', r);
-        return { nom, action: $('input[name=f-action]:checked', r).value, actif: actif ? actif.checked : true };
+        return { nom, action: $('input[name=f-action]:checked', r).value, actif: actif ? actif.checked : true, cerfAnDernier: $('#f-cerf', r).checked };
       },
     });
     if (!res) return;
@@ -813,6 +822,24 @@
             <input id="r-sd" inputmode="decimal" data-change="reglage" data-id="seuilDemi" value="${kg(p.seuilDemi)}"></div>
         </div>
         <p class="aide">Au-delà : 4 quarts, 2 avant et 2 arrière. La catégorie reste modifiable bête par bête.</p>
+      </section>
+
+      <section class="reglage">
+        <h2>Découpe par espèce</h2>
+        <ul class="decoupes">
+          ${p.especes.map((e) => {
+            const v = L.decoupeEspece(e, p);
+            return `<li><label for="r-dec-${esc(e)}">${esc(e)}</label>
+              <select id="r-dec-${esc(e)}" data-change="reglage" data-id="decoupe:${esc(e)}">
+                <option value="">Selon le poids</option>
+                ${L.DECOUPES.map((x) => `<option ${x === v ? 'selected' : ''}>${x}</option>`).join('')}
+              </select></li>`;
+          }).join('')}
+        </ul>
+        <p class="aide">8 morceaux : 2 avants, 2 côtes, 2 filets, 2 cuissots. 6 morceaux : 2 avants, 2 côtes/filets, 2 cuissots.
+          Les espèces découpées en morceaux comptent ensemble comme « Cervidés » pour l’équité.
+          Le cerf, rare, a sa propre règle : personne n’en reçoit un 2e morceau dans la saison tant qu’un présent n’en a pas eu,
+          et ceux qui n’en ont pas eu la saison précédente passent d’abord.</p>
       </section>
 
       <section class="reglage">
@@ -925,19 +952,20 @@
     const T = L.totaux(d().journal);
     const E = L.ecarts({ membres: d().membres, params: d().params, journal: d().journal });
     const ecartDe = new Map(E.lignes.map((l) => [l.id, l]));
-    const tete = ['Nom', 'Action', 'Actif', 'Entiers', 'Demis', 'Quarts avant', 'Quarts arrière', 'Total pièces', 'Kg reçus', 'Nb « non »',
+    const pieces = (t) => L.TYPES.map((k) => nb(t[k] || 0));
+    const tete = ['Nom', 'Action', 'Actif', ...L.TYPES, 'Total pièces', 'Kg reçus', 'Nb « non »', 'Morceaux de cerf', 'Cerf la saison dernière',
       'Écart total (pièces)', ...E.especes.map((e) => `Écart ${e || 'sans espèce'}`), 'Écart kg'];
     const vides = () => ['', ...E.especes.map(() => ''), ''];
     const lignes = [...d().membres].sort((a, b) => L.compareNoms(a.nom, b.nom)).map((m) => {
       const t = T['m:' + m.id] || {};
       const ec = ecartDe.get(m.id);
-      return [m.nom, m.action, m.actif ? 'Oui' : 'Non', nb(t.Entier || 0), nb(t.Demi || 0), nb(t['Quart avant'] || 0),
-        nb(t['Quart arrière'] || 0), nb(t.total || 0), nb(t.kg || 0), L.nbNon(m.id, d().journees),
+      return [m.nom, m.action, m.actif ? 'Oui' : 'Non', ...pieces(t), nb(t.total || 0), nb(t.kg || 0), L.nbNon(m.id, d().journees),
+        ec ? nb(ec.cerf) : '', m.cerfAnDernier ? 'Oui' : 'Non',
         ...(ec ? [nb(ec.total), ...E.especes.map((e) => nb(ec.especes[e])), nb(ec.kg)] : vides())];
     });
     Object.keys(T).filter((k) => k.startsWith('p:')).forEach((k) => {
       const t = T[k];
-      lignes.push([k.slice(2), '', 'Hors équilibrage', nb(t.Entier), nb(t.Demi), nb(t['Quart avant']), nb(t['Quart arrière']), nb(t.total), nb(t.kg), '', ...vides()]);
+      lignes.push([k.slice(2), '', 'Hors équilibrage', ...pieces(t), nb(t.total), nb(t.kg), '', '', '', ...vides()]);
     });
     partagerFichier(nomFichier(`venaison-totaux-${d().saison}.csv`), csv([tete, ...lignes]), 'text/csv');
   }
@@ -1176,7 +1204,8 @@
     async nouvelleSaison() {
       const ok = await confirmer('Préparer une nouvelle saison ?',
         `<p>La sauvegarde de la saison ${esc(d().saison)} va d’abord être exportée.</p>
-         <p>Ensuite, les journées et l’historique seront vidés. Les membres et les réglages sont conservés.</p>`, 'Continuer');
+         <p>Ensuite, les journées et l’historique seront vidés. Les membres et les réglages sont conservés.</p>
+         <p>L’appli retient qui a reçu du cerf cette saison : les autres seront servis en cerf d’abord la saison prochaine.</p>`, 'Continuer');
       if (!ok) return;
       const sauve = await exporterSauvegarde();
       if (!sauve && !(await confirmer('Sauvegarde non exportée', '<p>Continuer sans sauvegarde ? L’historique de la saison sera perdu.</p>', 'Continuer sans sauvegarde', true))) return;
@@ -1191,6 +1220,8 @@
         valider: (r) => $('#f-saison', r).value.trim() || { erreur: 'Indiquez un nom de saison.' },
       });
       if (!nom) return;
+      const avecCerf = L.membresAvecCerf(d().journal);
+      d().membres.forEach((m) => { m.cerfAnDernier = avecCerf.has(m.id); });
       d().journees = [];
       d().journal = [];
       d().journeeCourante = null;
@@ -1235,6 +1266,11 @@
         d().saison = el.value.trim() || d().saison;
       } else if (k === 'prioTireur') {
         p.prioTireur = el.checked;
+      } else if (k.startsWith('decoupe:')) {
+        const espece = k.slice('decoupe:'.length);
+        p.decoupe = Object.assign({}, p.decoupe);
+        Object.keys(p.decoupe).filter((x) => L.memeNom(x, espece)).forEach((x) => { delete p.decoupe[x]; });
+        if (el.value) p.decoupe[espece] = el.value;
       } else {
         const v = L.parseNombre(el.value);
         if (!(v > 0)) {

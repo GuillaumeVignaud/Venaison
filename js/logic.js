@@ -3,6 +3,10 @@
  *
  * Tous les scores = pièces reçues ÷ coefficient de l'action (1 → 2, 1/2 → 1). Une pièce compte 1, quelle que soit sa taille.
  *  - le « type » d'une pièce = espèce + pièce (ex. quart arrière de chevreuil)
+ *  - les espèces découpées en 8 ou 6 morceaux (réglages : cerf, daguet, biche, faon) comptent ensemble
+ *    comme « Cervidés » pour l'équité
+ *  - cerf : distribué en premier ; jamais un 2e morceau de la saison tant qu'un présent n'en a pas eu,
+ *    priorité à ceux qui n'en ont pas eu la saison précédente ; cette règle passe avant la limite par jour
  *  - le tireur présent reçoit d'abord une pièce de chacune de ses bêtes (option)
  *  - 1 pièce par présent et par journée ; un présent en retard (total sous la moyenne) peut en recevoir une 2e,
  *    d'un autre type (même type permis pour le sanglier) ; 3 pièces ou plus seulement s'il y a plus de 2 pièces par présent
@@ -19,10 +23,18 @@
 })(typeof self !== 'undefined' ? self : this, function () {
   'use strict';
 
-  const TYPES = ['Entier', 'Demi', 'Quart avant', 'Quart arrière'];
-  const CATEGORIES = ['Entier', '2 demis', '4 quarts'];
+  const TYPES = ['Entier', 'Demi', 'Quart avant', 'Quart arrière', 'Cuissot', 'Filet', 'Côtes/filet', 'Côte', 'Avant'];
+  /** Pièces des cervidés (découpes « 8 morceaux » et « 6 morceaux »). */
+  const PIECES_CERVIDES = ['Cuissot', 'Filet', 'Côtes/filet', 'Côte', 'Avant'];
+  const DECOUPES = ['8 morceaux', '6 morceaux'];
+  const CATEGORIES = ['Entier', '2 demis', '4 quarts', ...DECOUPES];
+  const CERVIDES = 'Cervidés';
   const EPS = 1e-6;
-  const ORDRE_PIECES = { 'Quart arrière': 0, 'Quart avant': 1, Demi: 2, Entier: 3 };
+  // Ordre de distribution dans une même espèce : les morceaux les plus prisés d'abord
+  const ORDRE_PIECES = {
+    Cuissot: 0, Filet: 1, 'Côtes/filet': 2, 'Côte': 3, Avant: 4,
+    'Quart arrière': 5, 'Quart avant': 6, Demi: 7, Entier: 8,
+  };
 
   function compareNoms(a, b) {
     return String(a).localeCompare(String(b), 'fr', { sensitivity: 'base' });
@@ -32,7 +44,16 @@
     return compareNoms(String(a || '').trim(), String(b || '').trim()) === 0;
   }
 
-  function categorieSuggeree(poids, params) {
+  /** Découpe imposée à une espèce dans les réglages (« 8 morceaux », « 6 morceaux ») ou ''. */
+  function decoupeEspece(espece, params) {
+    const dec = (params && params.decoupe) || {};
+    const k = Object.keys(dec).find((x) => memeNom(x, espece) && DECOUPES.includes(dec[x]));
+    return k ? dec[k] : '';
+  }
+
+  function categorieSuggeree(poids, params, espece) {
+    const dec = decoupeEspece(espece, params);
+    if (dec) return dec;
     if (!(poids > 0)) return '';
     if (poids < params.seuilEntier) return 'Entier';
     if (poids <= params.seuilDemi) return '2 demis';
@@ -40,15 +61,17 @@
   }
 
   function categorieBete(bete, params) {
-    return bete.categorie || categorieSuggeree(bete.poids, params);
+    return bete.categorie || categorieSuggeree(bete.poids, params, bete.espece);
   }
 
-  /** Pièces d'une bête, dans l'ordre de distribution (quarts arrière d'abord). */
+  /** Pièces d'une bête, dans l'ordre de distribution (morceaux les plus prisés d'abord). */
   function piecesDe(categorie) {
     switch (categorie) {
       case 'Entier': return ['Entier'];
       case '2 demis': return ['Demi', 'Demi'];
       case '4 quarts': return ['Quart arrière', 'Quart arrière', 'Quart avant', 'Quart avant'];
+      case '8 morceaux': return ['Cuissot', 'Cuissot', 'Filet', 'Filet', 'Côte', 'Côte', 'Avant', 'Avant'];
+      case '6 morceaux': return ['Cuissot', 'Cuissot', 'Côtes/filet', 'Côtes/filet', 'Avant', 'Avant'];
       default: return [];
     }
   }
@@ -90,30 +113,39 @@
     return espece ? `${piece} de ${espece.toLowerCase()}` : piece;
   }
   const estSanglier = (espece) => memeNom(espece, 'Sanglier');
+  const estCerf = (espece) => memeNom(espece, 'Cerf');
 
-  function compteurVide() {
-    return { total: 0, esp: {}, type: {}, kg: 0, dernier: '' };
+  /** Groupe d'équité : les espèces découpées en 6 ou 8 morceaux comptent ensemble comme « Cervidés ». */
+  function groupeEspece(espece, params) {
+    const e = nomEspece(espece);
+    return memeNom(e, CERVIDES) || decoupeEspece(e, params) ? CERVIDES : e;
   }
 
-  function ajouter(c, espece, piece, q) {
-    const e = nomEspece(espece);
-    const k = cleType(e, piece);
+  function compteurVide() {
+    return { total: 0, esp: {}, type: {}, cerf: 0, kg: 0, dernier: '' };
+  }
+
+  function ajouter(c, espece, piece, q, params) {
+    const g = groupeEspece(espece, params);
+    const k = cleType(g, piece);
     c.total += q;
-    c.esp[e] = (c.esp[e] || 0) + q;
+    c.esp[g] = (c.esp[g] || 0) + q;
     c.type[k] = (c.type[k] || 0) + q;
+    if (estCerf(espece)) c.cerf += q;
   }
 
   /** Pièces reçues par membre, depuis le journal (ajustements compris) :
-   *  { total, esp: {espèce: n}, type: {clé: n}, kg, dernier } — kg et dernier ne comptent que la viande reçue.
+   *  { total, esp: {groupe: n}, type: {clé groupe|pièce: n}, cerf, kg, dernier } — kg et dernier ne comptent
+   *  que la viande reçue. Sans `params`, chaque espèce est son propre groupe.
    *  Les distributions de la date `exclureDate` sont ignorées (journée en cours de recalcul). */
-  function compteurs(journal, ids, exclureDate) {
+  function compteurs(journal, ids, exclureDate, params) {
     const cnt = {};
     ids.forEach((id) => { cnt[id] = compteurVide(); });
     journal.forEach((e) => {
       if (e.nature === 'Distribution' && exclureDate && e.date === exclureDate) return;
       const c = e.membreId && cnt[e.membreId];
       if (!c || !TYPES.includes(e.piece)) return;
-      ajouter(c, e.espece, e.piece, Number(e.qte) || 0);
+      ajouter(c, e.espece, e.piece, Number(e.qte) || 0, params);
       if (e.nature === 'Distribution') {
         c.kg += Number(e.poidsPiece) || 0;
         if (e.date && e.date > c.dernier) c.dernier = e.date;
@@ -127,6 +159,12 @@
 
   function saisonCommencee(journal) {
     return journal.some((e) => e.nature === 'Distribution');
+  }
+
+  /** Identifiants des membres qui ont reçu du cerf (à retenir avant de passer à une nouvelle saison). */
+  function membresAvecCerf(journal) {
+    return new Set(journal.filter((e) => e.nature === 'Distribution' && e.membreId && estCerf(e.espece) && Number(e.qte) > 0)
+      .map((e) => e.membreId));
   }
 
   function nomTireur(bete, membres) {
@@ -200,7 +238,8 @@
       if (deja) avertissements.push(`Bague ${b.bague} déjà distribuée le ${dateFr(deja.date)}.`);
     });
 
-    const cnt = compteurs(journal, eligibles.map((e) => e.m.id), journee.date);
+    const cnt = compteurs(journal, eligibles.map((e) => e.m.id), journee.date, params);
+    const groupe = (espece) => groupeEspece(espece, params);
 
     // En retard : total de saison (÷ coefficient) sous la moyenne des présents, avant ce jour
     const moyenne = eligibles.reduce((s, e) => s + cnt[e.m.id].total, 0) / eligibles.reduce((s, e) => s + e.coef, 0);
@@ -212,7 +251,7 @@
     function donner(p, e, remarque) {
       p.dest = 'm:' + e.m.id;
       p.remarque = remarque;
-      ajouter(cnt[e.m.id], p.espece, p.piece, 1);
+      ajouter(cnt[e.m.id], p.espece, p.piece, 1, params);
       cnt[e.m.id].dernier = journee.date;
       jour[e.m.id].n += 1;
       jour[e.m.id].types.add(p.cle);
@@ -227,7 +266,7 @@
       types.forEach((t) => {
         pieces.push({
           beteId: b.id, bague: b.bague || '', espece: b.espece || '', poidsBete: b.poids,
-          tireur, piece: t, poidsPiece: b.poids / types.length, dest: '', remarque: '', cle: cleType(b.espece, t),
+          tireur, piece: t, poidsPiece: b.poids / types.length, dest: '', remarque: '', cle: cleType(groupe(b.espece), t),
         });
       });
       if (journee.prioTireur) {
@@ -237,19 +276,21 @@
       }
     });
 
-    // Ordre de distribution : espèces les plus rares de la saison d'abord, puis quarts arrière, quarts avant, demis, entiers
+    // Ordre de distribution : le cerf d'abord, puis les espèces (groupes) les plus rares de la saison,
+    // et dans une espèce les morceaux les plus prisés d'abord
     const parEspece = {};
     journal.forEach((e) => {
       if (e.nature !== 'Distribution' || e.date === journee.date || !TYPES.includes(e.piece)) return;
-      const s = nomEspece(e.espece);
+      const s = groupe(e.espece);
       parEspece[s] = (parEspece[s] || 0) + (Number(e.qte) || 0);
     });
     const ordre = pieces.map((p, i) => i).filter((i) => !pieces[i].dest).sort((a, b) => {
       const pa = pieces[a];
       const pb = pieces[b];
-      const ea = nomEspece(pa.espece);
-      const eb = nomEspece(pb.espece);
-      return (parEspece[ea] || 0) - (parEspece[eb] || 0) || compareNoms(ea, eb) ||
+      const ga = groupe(pa.espece);
+      const gb = groupe(pb.espece);
+      return (estCerf(pa.espece) ? 0 : 1) - (estCerf(pb.espece) ? 0 : 1) ||
+        (parEspece[ga] || 0) - (parEspece[gb] || 0) || compareNoms(ga, gb) ||
         ORDRE_PIECES[pa.piece] - ORDRE_PIECES[pb.piece] || a - b;
     });
 
@@ -259,7 +300,7 @@
       const cb = cnt[b.m.id];
       const ja = jour[a.m.id];
       const jb = jour[b.m.id];
-      const e = nomEspece(p.espece);
+      const e = groupe(p.espece);
       return (surplus ? (ja.types.has(p.cle) ? 1 : 0) - (jb.types.has(p.cle) ? 1 : 0) : 0) ||
         ecartSigne(ca.total / a.coef, cb.total / b.coef) ||
         ecartSigne((ca.esp[e] || 0) / a.coef, (cb.esp[e] || 0) / b.coef) ||
@@ -269,25 +310,44 @@
         compareNoms(a.m.nom, b.m.nom);
     }
 
+    const minJour = (liste) => Math.min(...liste.map((e) => jour[e.m.id].n));
     let surplusDonne = false;
     ordre.forEach((i) => {
       const p = pieces[i];
       const sanglier = estSanglier(p.espece);
+      // Cerf : tant qu'un présent n'en a jamais eu cette saison (ce jour compris), seuls ceux-là peuvent en recevoir,
+      // et parmi eux d'abord ceux qui n'en ont pas eu la saison précédente.
+      // Cette règle passe avant la limite d'une pièce par jour.
+      let groupeCerf = null;
+      if (estCerf(p.espece)) {
+        const jamais = eligibles.filter((e) => cnt[e.m.id].cerf < EPS);
+        if (jamais.length) {
+          const nouveaux = jamais.filter((e) => !e.m.cerfAnDernier);
+          groupeCerf = nouveaux.length ? nouveaux : jamais;
+        }
+      }
+      const base = groupeCerf || eligibles;
       // Rien reçu ce jour, ou en retard avec une seule pièce d'un autre type (même type permis pour le sanglier)
-      let candidats = eligibles.filter((e) => {
+      let candidats = base.filter((e) => {
         const j = jour[e.m.id];
         return j.n === 0 || (j.n === 1 && enRetard.has(e.m.id) && (sanglier || !j.types.has(p.cle)));
       });
       let surplus = false;
+      let remarque = '';
       if (!candidats.length) {
         // Plus de pièces que de places : on monte d'un cran à la fois (2 pièces chacun, puis 3…)
-        const min = Math.min(...eligibles.map((e) => jour[e.m.id].n));
-        candidats = eligibles.filter((e) => jour[e.m.id].n === min);
+        const min = minJour(base);
+        candidats = base.filter((e) => jour[e.m.id].n === min);
         surplus = true;
-        surplusDonne = true;
+        // Cerf donné au-delà de la limite du jour alors que d'autres présents ont moins : priorité cerf
+        if (groupeCerf && minJour(eligibles) < min) remarque = 'Priorité cerf';
+        else {
+          remarque = 'Surplus du jour';
+          surplusDonne = true;
+        }
       }
       const best = candidats.reduce((a, b) => (comparer(b, a, p, surplus) < 0 ? b : a));
-      donner(p, best, surplus ? 'Surplus du jour' : jour[best.m.id].n ? 'Rattrapage' : '');
+      donner(p, best, remarque || (jour[best.m.id].n ? 'Rattrapage' : ''));
     });
 
     const notes = [];
@@ -307,7 +367,7 @@
     const nouveau = membres.find((m) => m.id === membreId);
     const cN = nouveau ? coefficient(nouveau.action, params) : 0;
     const autres = membres.filter((m) => m.actif && m.id !== membreId && coefficient(m.action, params) > 0);
-    const cnt = compteurs(journal, autres.map((m) => m.id), null);
+    const cnt = compteurs(journal, autres.map((m) => m.id), null, params);
     let ref = null;
     let refSc = 0;
     autres.forEach((m) => {
@@ -328,10 +388,10 @@
   }
 
   /** Avance (+) ou retard (−) de chaque membre actif sur sa juste part, en pièces et en kg, ramené à son action.
-   *  Retourne { especes: [...], lignes: [{ id, nom, action, recu, total, especes: {espèce: écart}, kg }] }. */
+   *  Retourne { especes: [...], lignes: [{ id, nom, action, recu, cerf, total, especes: {groupe: écart}, kg }] }. */
   function ecarts({ membres, params, journal }) {
     const actifs = membres.filter((m) => m.actif && coefficient(m.action, params) > 0);
-    const cnt = compteurs(journal, actifs.map((m) => m.id), null);
+    const cnt = compteurs(journal, actifs.map((m) => m.id), null, params);
     const sommeCoef = actifs.reduce((s, m) => s + coefficient(m.action, params), 0);
     const parPart = (f) => (sommeCoef ? actifs.reduce((s, m) => s + f(cnt[m.id]), 0) / sommeCoef : 0);
     const especes = [...new Set(actifs.flatMap((m) => Object.keys(cnt[m.id].esp).filter((e) => cnt[m.id].esp[e])))]
@@ -348,7 +408,7 @@
         const k = coefficient(m.action, params);
         const esp = {};
         especes.forEach((e) => { esp[e] = r((c.esp[e] || 0) - partEsp[e] * k, 100); });
-        return { id: m.id, nom: m.nom, action: m.action, recu: c.total, total: r(c.total - partTotal * k, 100), especes: esp, kg: r(c.kg - partKg * k, 10) };
+        return { id: m.id, nom: m.nom, action: m.action, recu: c.total, cerf: c.cerf, total: r(c.total - partTotal * k, 100), especes: esp, kg: r(c.kg - partKg * k, 10) };
       }),
     };
   }
@@ -384,6 +444,7 @@
   return {
     TYPES, CATEGORIES, compareNoms, memeNom, categorieSuggeree, categorieBete, piecesDe, coefficient,
     seuilAlerte, nbNon, enAlerte, compteurs, saisonCommencee, nomTireur, attribuer, alignement, ecarts, totaux,
-    dateFr, parseNombre, cleType, decouperCle, libelleCle, estSanglier,
+    dateFr, parseNombre, cleType, decouperCle, libelleCle, estSanglier, estCerf, groupeEspece, decoupeEspece,
+    membresAvecCerf, DECOUPES, PIECES_CERVIDES, CERVIDES,
   };
 });

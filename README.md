@@ -19,6 +19,12 @@ Règles :
   une 2e (« Rattrapage »), mais pas du même type, sauf pour le sanglier. S'il y a plus de pièces que de places,
   le surplus est réparti 2 par personne au plus, et 3 ou plus seulement s'il y a plus de 2 pièces par présent ;
 - les espèces les plus rares de la saison sont distribuées en premier, quarts arrière d'abord ;
+- cervidés (réglable dans Réglages > Découpe par espèce) : cerf et daguet en 8 morceaux (2 avants, 2 côtes,
+  2 filets, 2 cuissots), biche et faon en 6 (2 avants, 2 côtes/filets, 2 cuissots). Ils comptent ensemble
+  comme « Cervidés » pour l'équité ; les cuissots partent d'abord ;
+- cerf : distribué avant tout le reste. Personne n'en reçoit un 2e morceau dans la saison tant qu'un présent
+  n'en a pas eu, et ceux qui n'en ont pas eu la saison précédente passent d'abord (fiche membre, remplie
+  toute seule à chaque nouvelle saison). Cette règle passe avant la limite d'une pièce par jour (« Priorité cerf ») ;
 - répartition corrigeable à la main, y compris au profit d'un propriétaire (hors équilibrage) ;
 - alignement d'un membre arrivé en cours de saison sur le moins servi ;
 - Historique > Écarts : avance ou retard de chacun sur sa juste part (total, par espèce, en kg).
