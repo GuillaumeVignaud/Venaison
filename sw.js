@@ -3,7 +3,7 @@
  * À CHAQUE MISE EN LIGNE : augmenter le numéro de CACHE_NAME (venaison-v1 → venaison-v2 …),
  * sinon les téléphones garderont l'ancienne version. Le numéro s'affiche en bas des Réglages.
  */
-const CACHE_NAME = 'venaison-v9';
+const CACHE_NAME = 'venaison-v10';
 
 const FICHIERS = [
   './',

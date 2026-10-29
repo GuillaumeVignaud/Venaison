@@ -387,7 +387,7 @@ body.avec-action main { padding-bottom: calc(var(--haut-onglets) + var(--haut-ac
 .etat { color: var(--gris); }
 .etat.a-faire { color: var(--attente); font-weight: 600; }
 .pile { display: grid; gap: 8px; }
-.version { text-align: center; color: var(--gris); font-size: 13px; cursor: pointer; -webkit-user-select: none; user-select: none; }
+.version { text-align: center; color: var(--gris); font-size: 13px; }
 
 .champ { display: flex; flex-direction: column; gap: 5px; margin: 0 0 12px; min-width: 0; border: 0; padding: 0; }
 .champ label, .champ legend { font-size: 14px; font-weight: 600; color: var(--gris); padding: 0; margin-bottom: 5px; }
