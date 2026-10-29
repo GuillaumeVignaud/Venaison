@@ -164,6 +164,9 @@
     const cle = cleFocus(document.activeElement);
     $('#saison').textContent = 'Saison ' + d().saison;
     const vues = { journee: vueJournee, historique: vueHistorique, membres: vueMembres, reglages: vueReglages };
+    // Garde la position de défilement du tableau (ouvrir un détail ne doit pas ramener en haut)
+    const cadre = $('#vue .tableau-defile');
+    const defile = cadre ? { haut: cadre.scrollTop, gauche: cadre.scrollLeft } : null;
     $('#vue').innerHTML = vues[ui.onglet]();
     document.querySelectorAll('.onglet').forEach((b) => {
       if (b.dataset.onglet === ui.onglet) b.setAttribute('aria-current', 'page');
@@ -176,6 +179,11 @@
     }
     if (ui.onglet === 'reglages') afficherVersion();
     ajusterTableaux();
+    const nouveau = defile && $('#vue .tableau-defile');
+    if (nouveau) {
+      nouveau.scrollTop = defile.haut;
+      nouveau.scrollLeft = defile.gauche;
+    }
   }
 
   /** Donne au cadre du tableau la hauteur libre de l'écran : sous le titre et les boutons,
