@@ -620,16 +620,12 @@
       .sort((a, b) => a.date.localeCompare(b.date));
   }
 
-  function histTotaux() {
-    const T = L.totaux(d().journal);
-    const vide = { total: 0, kg: 0 };
-    const membres = d().membres.filter((m) => m.actif || T['m:' + m.id]).sort((a, b) => L.compareNoms(a.nom, b.nom));
-    const autres = new Set(d().params.proprietaires);
-    d().journal.forEach((e) => { if (e.nature === 'Distribution' && !e.membreId) autres.add(e.nom); });
-
-    // Colonnes : seulement les couples espèce / morceau reçus par au moins une ligne affichée
+  /** Colonnes espèce / morceau des totaux, pour le tableau et l'export.
+   *  Seulement les couples reçus par au moins une des lignes `cles` ; espèces dans l'ordre des réglages
+   *  (puis inconnues par ordre alphabétique, sans espèce en dernier), morceaux dans l'ordre de L.TYPES.
+   *  parType[cle] : quantités par colonne, « chevreuil » et « Chevreuil » regroupés sous le nom des réglages. */
+  function colonnesTotaux(T, cles) {
     const ordreEsp = d().params.especes;
-    // Regroupe « chevreuil » et « Chevreuil » sous le nom des réglages
     const parType = {};
     Object.keys(T).forEach((c) => {
       parType[c] = {};
@@ -639,7 +635,6 @@
         parType[c][kk] = (parType[c][kk] || 0) + q;
       });
     });
-    const cles = [...membres.map((m) => 'm:' + m.id), ...[...autres].map((nom) => 'p:' + nom)];
     const somme = {};
     cles.forEach((c) => Object.entries(parType[c] || {}).forEach(([k, q]) => { somme[k] = (somme[k] || 0) + q; }));
     const rangEsp = (e) => {
@@ -654,6 +649,18 @@
       return ga - gb || (ga === 1 ? L.compareNoms(va, vb) : va - vb) || rangPiece(a.piece) - rangPiece(b.piece) ||
         L.compareNoms(a.piece, b.piece);
     }).map((c, i, arr) => ({ ...c, cle: L.cleType(c.espece, c.piece), debut: !i || arr[i - 1].espece !== c.espece }));
+    return { parType, colonnes };
+  }
+
+  function histTotaux() {
+    const T = L.totaux(d().journal);
+    const vide = { total: 0, kg: 0 };
+    const membres = d().membres.filter((m) => m.actif || T['m:' + m.id]).sort((a, b) => L.compareNoms(a.nom, b.nom));
+    const autres = new Set(d().params.proprietaires);
+    d().journal.forEach((e) => { if (e.nature === 'Distribution' && !e.membreId) autres.add(e.nom); });
+
+    const cles = [...membres.map((m) => 'm:' + m.id), ...[...autres].map((nom) => 'p:' + nom)];
+    const { parType, colonnes } = colonnesTotaux(T, cles);
     const groupes = [];
     colonnes.forEach((c) => {
       if (c.debut) groupes.push({ espece: c.espece, n: 0 });
@@ -1048,20 +1055,33 @@
     const T = L.totaux(d().journal);
     const E = L.ecarts({ membres: d().membres, params: d().params, journal: d().journal });
     const ecartDe = new Map(E.lignes.map((l) => [l.id, l]));
-    const pieces = (t) => L.TYPES.map((k) => nb(t[k] || 0));
-    const tete = ['Nom', 'Action', 'Actif', ...L.TYPES, 'Total pièces', 'Kg reçus', 'Nb « non »', 'Morceaux de cerf', 'Cerf la saison dernière',
+    const cles = [...d().membres.map((m) => 'm:' + m.id), ...Object.keys(T).filter((k) => k.startsWith('p:'))];
+    const { colonnes } = colonnesTotaux(T, cles);
+    // Pour chaque destinataire et chaque colonne espèce / morceau : la date de chaque distribution
+    const ordreEsp = d().params.especes;
+    const dates = {};
+    [...d().journal].filter((e) => e.nature === 'Distribution').sort((a, b) => a.date.localeCompare(b.date)).forEach((e) => {
+      const qui = e.membreId ? 'm:' + e.membreId : 'p:' + e.nom;
+      const esp = String(e.espece || '').trim();
+      const col = L.cleType(ordreEsp.find((x) => L.memeNom(x, esp)) || esp, e.piece);
+      if (!dates[qui]) dates[qui] = {};
+      if (!dates[qui][col]) dates[qui][col] = [];
+      for (let i = 0; i < Math.max(1, Math.round(Number(e.qte) || 1)); i++) dates[qui][col].push(L.dateFr(e.date));
+    });
+    const pieces = (cle) => colonnes.map((c) => ((dates[cle] || {})[c.cle] || []).join(', '));
+    const tete = ['Nom', 'Action', 'Actif', ...colonnes.map((c) => `${c.espece || 'Autre'} - ${c.piece}`), 'Total pièces', 'Kg reçus', 'Nb « non »', 'Morceaux de cerf', 'Cerf la saison dernière',
       'Écart total (pièces)', ...E.especes.map((e) => `Écart ${e || 'sans espèce'}`), 'Écart kg'];
     const vides = () => ['', ...E.especes.map(() => ''), ''];
     const lignes = [...d().membres].sort((a, b) => L.compareNoms(a.nom, b.nom)).map((m) => {
       const t = T['m:' + m.id] || {};
       const ec = ecartDe.get(m.id);
-      return [m.nom, m.action, m.actif ? 'Oui' : 'Non', ...pieces(t), nb(t.total || 0), nb(t.kg || 0), L.nbNon(m.id, d().journees),
+      return [m.nom, m.action, m.actif ? 'Oui' : 'Non', ...pieces('m:' + m.id), nb(t.total || 0), nb(t.kg || 0), L.nbNon(m.id, d().journees),
         ec ? nb(ec.cerf) : '', m.cerfAnDernier ? 'Oui' : 'Non',
         ...(ec ? [nb(ec.total), ...E.especes.map((e) => nb(ec.especes[e])), nb(ec.kg)] : vides())];
     });
     Object.keys(T).filter((k) => k.startsWith('p:')).forEach((k) => {
       const t = T[k];
-      lignes.push([k.slice(2), '', 'Hors équilibrage', ...pieces(t), nb(t.total), nb(t.kg), '', '', '', ...vides()]);
+      lignes.push([k.slice(2), '', 'Hors équilibrage', ...pieces(k), nb(t.total), nb(t.kg), '', '', '', ...vides()]);
     });
     partagerFichier(nomFichier(`venaison-totaux-${d().saison}.csv`), csv([tete, ...lignes]), 'text/csv');
   }
