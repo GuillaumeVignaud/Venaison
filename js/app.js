@@ -1319,10 +1319,20 @@
       rendre();
     },
     ouvrirLigne(el) {
+      // Ajoute ou retire seulement la ligne de détail, sans redessiner l'écran :
+      // le tableau reste à la même position (iPhone compris)
       const k = el.dataset.id;
-      if (ui.ouverts.has(k)) ui.ouverts.delete(k);
-      else ui.ouverts.add(k);
-      rendre();
+      const tr = el.closest('tr');
+      const suivante = tr && tr.nextElementSibling;
+      if (ui.ouverts.has(k)) {
+        ui.ouverts.delete(k);
+        if (suivante && suivante.classList.contains('detail')) suivante.remove();
+      } else {
+        ui.ouverts.add(k);
+        if (tr) tr.insertAdjacentHTML('afterend', `<tr class="detail"><td colspan="${tr.children.length}">${detailLignes(k)}</td></tr>`);
+      }
+      el.setAttribute('aria-expanded', String(ui.ouverts.has(k)));
+      if (!tr) rendre();
     },
     ajouterMembre() { formMembre(null); },
     editerMembre(el) { formMembre(membre(el.dataset.id)); },
