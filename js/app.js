@@ -1324,6 +1324,18 @@
       const k = el.dataset.id;
       const tr = el.closest('tr');
       const suivante = tr && tr.nextElementSibling;
+      // Safari (iPhone) peut remettre le cadre en haut quand son contenu change : on remet la position
+      const cadre = el.closest('.tableau-defile');
+      const pos = { haut: cadre ? cadre.scrollTop : 0, gauche: cadre ? cadre.scrollLeft : 0, page: window.scrollY };
+      const remettre = () => {
+        if (cadre) {
+          if (cadre.scrollTop !== pos.haut) cadre.scrollTop = pos.haut;
+          if (cadre.scrollLeft !== pos.gauche) cadre.scrollLeft = pos.gauche;
+        }
+        if (window.scrollY !== pos.page) window.scrollTo(window.scrollX, pos.page);
+      };
+      requestAnimationFrame(() => { remettre(); requestAnimationFrame(remettre); });
+      setTimeout(remettre, 50);
       if (ui.ouverts.has(k)) {
         ui.ouverts.delete(k);
         if (suivante && suivante.classList.contains('detail')) suivante.remove();
@@ -1332,6 +1344,7 @@
         if (tr) tr.insertAdjacentHTML('afterend', `<tr class="detail"><td colspan="${tr.children.length}">${detailLignes(k)}</td></tr>`);
       }
       el.setAttribute('aria-expanded', String(ui.ouverts.has(k)));
+      remettre();
       if (!tr) rendre();
     },
     ajouterMembre() { formMembre(null); },

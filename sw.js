@@ -3,7 +3,7 @@
  * À CHAQUE MISE EN LIGNE : augmenter le numéro de CACHE_NAME (venaison-v1 → venaison-v2 …),
  * sinon les téléphones garderont l'ancienne version. Le numéro s'affiche en bas des Réglages.
  */
-const CACHE_NAME = 'venaison-v7';
+const CACHE_NAME = 'venaison-v8';
 
 const FICHIERS = [
   './',
@@ -20,7 +20,11 @@ const FICHIERS = [
 ];
 
 self.addEventListener('install', (event) => {
-  event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(FICHIERS)).then(() => self.skipWaiting()));
+  // cache: 'reload' : va chercher les fichiers sur le serveur, pas dans le cache du navigateur
+  // (sinon la nouvelle version peut embarquer les anciens fichiers, surtout sur iPhone)
+  event.waitUntil(caches.open(CACHE_NAME)
+    .then((cache) => cache.addAll(FICHIERS.map((f) => new Request(f, { cache: 'reload' }))))
+    .then(() => self.skipWaiting()));
 });
 
 self.addEventListener('activate', (event) => {

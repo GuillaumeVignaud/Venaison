@@ -343,7 +343,7 @@ body.avec-action main { padding-bottom: calc(var(--haut-onglets) + var(--haut-ac
 .totaux .autres .nom { font-style: italic; }
 /* Le cadre défile dans les deux sens : l'en-tête reste collé en haut, entre la barre du haut et les onglets */
 .tableau-defile {
-  overflow: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain;
+  overflow: auto; overscroll-behavior: contain;
   border-radius: var(--rayon); border: 1px solid var(--trait); background: var(--carte);
   max-height: calc(100vh - 48px - env(safe-area-inset-top, 0px) - var(--haut-onglets) - var(--securite-bas) - 28px);
   max-height: calc(100dvh - 48px - env(safe-area-inset-top, 0px) - var(--haut-onglets) - var(--securite-bas) - 28px);
