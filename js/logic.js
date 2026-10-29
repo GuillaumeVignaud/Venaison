@@ -438,14 +438,16 @@
     };
   }
 
-  /** Totaux réellement reçus (hors ajustements) : { cle -> {Entier, Demi, ..., total, kg} } */
+  /** Totaux réellement reçus (hors ajustements) : { cle -> {Entier, Demi, ..., total, kg, type: {« espèce|pièce »: qté}} } */
   function totaux(journal) {
     const res = {};
     journal.forEach((e) => {
       if (e.nature !== 'Distribution') return;
       const cle = e.membreId ? 'm:' + e.membreId : 'p:' + e.nom;
-      if (!res[cle]) res[cle] = Object.assign(compteursVides(), { total: 0, kg: 0 });
+      if (!res[cle]) res[cle] = Object.assign(compteursVides(), { total: 0, kg: 0, type: {} });
       if (TYPES.includes(e.piece)) res[cle][e.piece] += Number(e.qte) || 0;
+      const k = cleType(e.espece, e.piece);
+      res[cle].type[k] = (res[cle].type[k] || 0) + (Number(e.qte) || 0);
       res[cle].total += Number(e.qte) || 0;
       res[cle].kg += Number(e.poidsPiece) || 0;
     });

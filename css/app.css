@@ -341,6 +341,19 @@ body.avec-action main { padding-bottom: calc(var(--haut-onglets) + var(--haut-ac
 .ecarts .ligne-nom { cursor: default; }
 .totaux .separateur th { background: var(--ecorce-fond); color: var(--ecorce); font-size: 13px; font-weight: 600; padding: 8px 12px; }
 .totaux .autres .nom { font-style: italic; }
+/* Le cadre défile dans les deux sens : l'en-tête reste collé en haut, entre la barre du haut et les onglets */
+.tableau-defile {
+  overflow: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain;
+  border-radius: var(--rayon); border: 1px solid var(--trait); background: var(--carte);
+  max-height: calc(100vh - 48px - env(safe-area-inset-top, 0px) - var(--haut-onglets) - var(--securite-bas) - 28px);
+  max-height: calc(100dvh - 48px - env(safe-area-inset-top, 0px) - var(--haut-onglets) - var(--securite-bas) - 28px);
+}
+.tableau-defile .totaux { overflow: visible; border: 0; border-radius: 0; }
+.tableau-defile .totaux thead { position: sticky; top: 0; z-index: 2; box-shadow: 0 1px 0 var(--trait); }
+.tableau-defile .totaux td, .tableau-defile .totaux thead th { white-space: nowrap; }
+.totaux thead .tete-pieces th { padding-top: 0; font-weight: 500; font-size: 12px; }
+.totaux thead .tete-pieces th:first-child { text-align: center; padding-left: 4px; }
+.totaux .debut-espece { border-left: 1px solid var(--trait); }
 .totaux tr.detail td { text-align: left; padding: 4px 12px 12px; background: var(--fond); border-top: 0; }
 .detail-liste { margin: 0; font-size: 14px; }
 .detail-liste dt { font-weight: 700; margin-top: 8px; color: var(--gris); }

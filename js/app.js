@@ -175,7 +175,26 @@
       if (el) el.focus({ preventScroll: true });
     }
     if (ui.onglet === 'reglages') afficherVersion();
+    ajusterTableaux();
   }
+
+  /** Donne au cadre du tableau la hauteur libre de l'écran : sous le titre et les boutons,
+   *  au-dessus de la note et des onglets, pour que tout tienne sans faire défiler la page. */
+  function ajusterTableaux() {
+    const haut = window.visualViewport ? window.visualViewport.height : window.innerHeight;
+    // La marge basse de <main> couvre déjà les onglets et la zone de sécurité du téléphone
+    const main = $('main');
+    const bas = main ? parseFloat(getComputedStyle(main).paddingBottom) || 0 : 0;
+    document.querySelectorAll('#vue .tableau-defile').forEach((cadre) => {
+      const debut = cadre.getBoundingClientRect().top + window.scrollY;
+      const suite = cadre.nextElementSibling;
+      const sous = suite ? suite.getBoundingClientRect().height + parseFloat(getComputedStyle(suite).marginTop || 0) : 0;
+      const dispo = haut - debut - sous - bas;
+      cadre.style.maxHeight = Math.max(dispo, 220) + 'px';
+    });
+  }
+  window.addEventListener('resize', ajusterTableaux);
+  if (window.visualViewport) window.visualViewport.addEventListener('resize', ajusterTableaux);
 
   // ------------------------------------------------------------------ journée
 
@@ -603,27 +622,68 @@
 
   function histTotaux() {
     const T = L.totaux(d().journal);
-    const vide = { Entier: 0, Demi: 0, 'Quart avant': 0, 'Quart arrière': 0, total: 0, kg: 0 };
+    const vide = { total: 0, kg: 0 };
     const membres = d().membres.filter((m) => m.actif || T['m:' + m.id]).sort((a, b) => L.compareNoms(a.nom, b.nom));
     const autres = new Set(d().params.proprietaires);
     d().journal.forEach((e) => { if (e.nature === 'Distribution' && !e.membreId) autres.add(e.nom); });
+
+    // Colonnes : seulement les couples espèce / morceau reçus par au moins une ligne affichée
+    const ordreEsp = d().params.especes;
+    // Regroupe « chevreuil » et « Chevreuil » sous le nom des réglages
+    const parType = {};
+    Object.keys(T).forEach((c) => {
+      parType[c] = {};
+      Object.entries(T[c].type).forEach(([k, q]) => {
+        const { espece, piece } = L.decouperCle(k);
+        const kk = L.cleType(ordreEsp.find((x) => L.memeNom(x, espece)) || espece, piece);
+        parType[c][kk] = (parType[c][kk] || 0) + q;
+      });
+    });
+    const cles = [...membres.map((m) => 'm:' + m.id), ...[...autres].map((nom) => 'p:' + nom)];
+    const somme = {};
+    cles.forEach((c) => Object.entries(parType[c] || {}).forEach(([k, q]) => { somme[k] = (somme[k] || 0) + q; }));
+    const rangEsp = (e) => {
+      if (!e) return [2, ''];
+      const i = ordreEsp.findIndex((x) => L.memeNom(x, e));
+      return i >= 0 ? [0, i] : [1, e];
+    };
+    const rangPiece = (p) => { const i = L.TYPES.indexOf(p); return i >= 0 ? i : L.TYPES.length; };
+    const colonnes = Object.keys(somme).filter((k) => somme[k]).map((k) => L.decouperCle(k)).sort((a, b) => {
+      const [ga, va] = rangEsp(a.espece);
+      const [gb, vb] = rangEsp(b.espece);
+      return ga - gb || (ga === 1 ? L.compareNoms(va, vb) : va - vb) || rangPiece(a.piece) - rangPiece(b.piece) ||
+        L.compareNoms(a.piece, b.piece);
+    }).map((c, i, arr) => ({ ...c, cle: L.cleType(c.espece, c.piece), debut: !i || arr[i - 1].espece !== c.espece }));
+    const groupes = [];
+    colonnes.forEach((c) => {
+      if (c.debut) groupes.push({ espece: c.espece, n: 0 });
+      groupes[groupes.length - 1].n++;
+    });
+    const nbCol = colonnes.length + 2;
+    const ABREGES = { Entier: 'Ent.', 'Quart avant': 'Q. av.', 'Quart arrière': 'Q. ar.', Cuissot: 'Cuis.', 'Côtes/filet': 'Côt./f.' };
+
     const ligne = (cle, nom, sous, alerteNom) => {
       const t = T[cle] || vide;
       const ouvert = ui.ouverts.has(cle);
-      const detail = ouvert ? `<tr class="detail"><td colspan="7">${detailLignes(cle)}</td></tr>` : '';
+      const detail = ouvert ? `<tr class="detail"><td colspan="${nbCol}">${detailLignes(cle)}</td></tr>` : '';
       const n = (x) => (x ? qte(x) : '<span class="zero">0</span>');
       return `<tr class="${alerteNom ? 'en-alerte' : ''}">
           <th scope="row"><button class="ligne-nom" data-act="ouvrirLigne" data-id="${esc(cle)}" aria-expanded="${ouvert}">
             <span class="nom">${esc(nom)}</span>${sous ? `<span class="sous">${sous}</span>` : ''}</button></th>
-          <td>${n(t.Entier)}</td><td>${n(t.Demi)}</td><td>${n(t['Quart avant'])}</td><td>${n(t['Quart arrière'])}</td><td>${n(L.PIECES_CERVIDES.reduce((x, k) => x + (t[k] || 0), 0))}</td>
-          <td class="kg">${t.kg ? kg(t.kg) : '<span class="zero">0</span>'}</td>
+          ${colonnes.map((c) => `<td${c.debut ? ' class="debut-espece"' : ''}>${n((parType[cle] || {})[c.cle])}</td>`).join('')}
+          <td class="kg debut-espece">${t.kg ? kg(t.kg) : '<span class="zero">0</span>'}</td>
         </tr>${detail}`;
     };
     if (!membres.length) return '<p class="vide-petit">Aucun membre pour l’instant.</p>';
+    const tete = colonnes.length
+      ? `<tr><th scope="col" rowspan="2">Membre</th>
+          ${groupes.map((g) => `<th scope="colgroup" colspan="${g.n}" class="debut-espece">${esc(g.espece || 'Autre')}</th>`).join('')}
+          <th scope="col" rowspan="2" class="debut-espece">kg</th></tr>
+        <tr class="tete-pieces">${colonnes.map((c) => `<th scope="col" title="${esc(c.piece)}"${c.debut ? ' class="debut-espece"' : ''}>${esc(ABREGES[c.piece] || c.piece)}</th>`).join('')}</tr>`
+      : '<tr><th scope="col">Membre</th><th scope="col">kg</th></tr>';
     return `
-      <table class="totaux">
-        <thead><tr><th scope="col">Membre</th><th scope="col" title="Entiers">Ent.</th><th scope="col" title="Demis">Demi</th>
-          <th scope="col" title="Quarts avant">Q. av.</th><th scope="col" title="Quarts arrière">Q. ar.</th><th scope="col" title="Morceaux de cervidés (cuissots, filets, côtes, avants)">Cerv.</th><th scope="col">kg</th></tr></thead>
+      <div class="tableau-defile"><table class="totaux">
+        <thead>${tete}</thead>
         <tbody>
           ${membres.map((m) => {
             const nn = L.nbNon(m.id, d().journees);
@@ -633,10 +693,10 @@
           }).join('')}
         </tbody>
         <tbody class="autres">
-          <tr class="separateur"><th colspan="7" scope="rowgroup">Propriétaires et autres destinataires, hors équilibrage</th></tr>
+          <tr class="separateur"><th colspan="${nbCol}" scope="rowgroup">Propriétaires et autres destinataires, hors équilibrage</th></tr>
           ${[...autres].sort(L.compareNoms).map((nom) => ligne('p:' + nom, nom, '', false)).join('')}
         </tbody>
-      </table>
+      </table></div>
       <p class="note">Touchez un nom pour voir le détail par journée.</p>`;
   }
 

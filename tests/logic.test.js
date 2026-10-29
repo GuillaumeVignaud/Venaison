@@ -492,6 +492,19 @@ test('priorité tireur quand sa 1re pièce est non consommable : il reçoit la s
   assert.strictEqual(r.pieces[1].remarque, 'Priorité tireur');
 });
 
+test('totaux : détail par espèce et par morceau', () => {
+  const journal = [
+    { date: '2026-10-01', nature: 'Distribution', espece: 'Chevreuil', piece: 'Demi', qte: 1, membreId: 'a' },
+    { date: '2026-10-02', nature: 'Distribution', espece: 'Chevreuil', piece: 'Demi', qte: 1, membreId: 'a' },
+    { date: '2026-10-02', nature: 'Distribution', espece: 'Cerf', piece: 'Cuissot', qte: 1, membreId: 'a' },
+    { date: '2026-10-02', nature: 'Distribution', piece: 'Entier', qte: 1, membreId: 'a' },
+  ];
+  const t = L.totaux(journal)['m:a'];
+  assert.deepStrictEqual(t.type, { 'Chevreuil|Demi': 2, 'Cerf|Cuissot': 1, '|Entier': 1 });
+  assert.strictEqual(t.Demi, 2);
+  assert.strictEqual(t.total, 4);
+});
+
 test('lignes « Non consommable » du journal : comptées pour personne', () => {
   const journal = [{ date: '2026-10-01', nature: 'Non consommable', espece: 'Cerf', piece: 'Cuissot', qte: 1, membreId: null, nom: '' }];
   const c = L.compteurs(journal, ['a', 'b'], null, paramsC);
