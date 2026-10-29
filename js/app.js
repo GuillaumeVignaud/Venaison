@@ -161,6 +161,7 @@
   }
 
   function rendre() {
+    diag('rendre (écran redessiné)');
     const cle = cleFocus(document.activeElement);
     $('#saison').textContent = 'Saison ' + d().saison;
     const vues = { journee: vueJournee, historique: vueHistorique, membres: vueMembres, reglages: vueReglages };
@@ -198,11 +199,70 @@
       const suite = cadre.nextElementSibling;
       const sous = suite ? suite.getBoundingClientRect().height + parseFloat(getComputedStyle(suite).marginTop || 0) : 0;
       const dispo = haut - debut - sous - bas;
+      const avant = cadre.style.maxHeight;
       cadre.style.maxHeight = Math.max(dispo, 220) + 'px';
+      if (avant !== cadre.style.maxHeight) diag(`hauteur cadre ${avant || '-'} -> ${cadre.style.maxHeight}`);
     });
   }
-  window.addEventListener('resize', ajusterTableaux);
-  if (window.visualViewport) window.visualViewport.addEventListener('resize', ajusterTableaux);
+  window.addEventListener('resize', () => { diag('resize fenêtre'); ajusterTableaux(); });
+  if (window.visualViewport) window.visualViewport.addEventListener('resize', () => { diag('resize visualViewport'); ajusterTableaux(); });
+
+  // ------------------------------------------------------------------ diagnostic (temporaire)
+  // Activé / désactivé en touchant 5 fois de suite le numéro de version, en bas des Réglages.
+  // Affiche en surimpression les défilements, clics et redessins, pour une capture d'écran.
+  let diagActif = false;
+  try { diagActif = localStorage.getItem('venaison-diag') === '1'; } catch (e) { /* stockage indisponible */ }
+  const diagLignes = [];
+  function diag(txt, cle) {
+    if (!diagActif) return;
+    const t = (performance.now() / 1000).toFixed(2);
+    const der = diagLignes[diagLignes.length - 1];
+    // Les défilements d'un même élément se suivent : on remplace la dernière ligne au lieu d'empiler
+    if (cle && der && der.cle === cle) der.txt = `${t} ${txt}`;
+    else diagLignes.push({ cle, txt: `${t} ${txt}` });
+    if (diagLignes.length > 30) diagLignes.shift();
+    let p = document.getElementById('diag');
+    if (!p) {
+      p = document.createElement('pre');
+      p.id = 'diag';
+      p.style.cssText = 'position:fixed;left:0;right:0;top:calc(env(safe-area-inset-top,0px) + 50px);z-index:100;margin:0;' +
+        'max-height:45vh;overflow:hidden;padding:6px 8px;font:11px/1.35 ui-monospace,Menlo,monospace;white-space:pre-wrap;' +
+        'background:rgba(0,0,0,.82);color:#7CFC8A;pointer-events:none;';
+      document.body.appendChild(p);
+    }
+    p.textContent = diagLignes.map((l) => l.txt).join('\n');
+  }
+  const nomDiag = (el) => {
+    if (!el || el === document || el === document.documentElement || el === document.body) return 'page';
+    return (el.id ? '#' + el.id : '') + (typeof el.className === 'string' && el.className ? '.' + el.className.split(' ')[0] : el.tagName.toLowerCase());
+  };
+  document.addEventListener('scroll', (e) => {
+    const el = e.target;
+    const page = el === document || el === document.documentElement || el === document.body;
+    const y = page ? window.scrollY : el.scrollTop;
+    diag(`défile ${nomDiag(el)} haut=${Math.round(y)}${page ? '' : ` gauche=${Math.round(el.scrollLeft)}`}`, 'scroll:' + nomDiag(el));
+  }, true);
+  document.addEventListener('focusin', (e) => diag(`focus ${nomDiag(e.target)}`), true);
+  document.addEventListener('touchend', (e) => {
+    const c = $('#vue .tableau-defile');
+    diag(`toucher ${nomDiag(e.target)} | cadre haut=${c ? Math.round(c.scrollTop) : '-'} page=${Math.round(window.scrollY)}`);
+  }, { capture: true, passive: true });
+  let diagTouches = 0;
+  let diagMinuterie = null;
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('#version')) return;
+    diagTouches++;
+    clearTimeout(diagMinuterie);
+    diagMinuterie = setTimeout(() => { diagTouches = 0; }, 1500);
+    if (diagTouches < 5) return;
+    diagTouches = 0;
+    diagActif = !diagActif;
+    try { localStorage.setItem('venaison-diag', diagActif ? '1' : '0'); } catch (err) { /* stockage indisponible */ }
+    if (!diagActif && document.getElementById('diag')) document.getElementById('diag').remove();
+    diagLignes.length = 0;
+    diag('diagnostic activé');
+    if (!diagActif) alert('Diagnostic désactivé');
+  });
 
   // ------------------------------------------------------------------ journée
 
@@ -1327,7 +1387,9 @@
       // Safari (iPhone) peut remettre le cadre en haut quand son contenu change : on remet la position
       const cadre = el.closest('.tableau-defile');
       const pos = { haut: cadre ? cadre.scrollTop : 0, gauche: cadre ? cadre.scrollLeft : 0, page: window.scrollY };
+      diag(`ouvrirLigne ${k} | cadre haut=${Math.round(pos.haut)} page=${Math.round(pos.page)}`);
       const remettre = () => {
+        diag(`remettre | cadre haut=${cadre ? Math.round(cadre.scrollTop) : '-'} (voulu ${Math.round(pos.haut)}) page=${Math.round(window.scrollY)}`);
         if (cadre) {
           if (cadre.scrollTop !== pos.haut) cadre.scrollTop = pos.haut;
           if (cadre.scrollLeft !== pos.gauche) cadre.scrollLeft = pos.gauche;
